@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #0d0e12;
+    background-image:
+      radial-gradient(ellipse at 30% 40%, rgba(124,106,245,0.2) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 60%, rgba(79,139,255,0.12) 0%, transparent 50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+  }
+  .logo-icon {
+    font-size: 80px; opacity: 0;
+    animation: pop 0.6s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+  }
+  .title {
+    font-size: 72px; font-weight: 800; color: #fff; margin-top: 16px;
+    opacity: 0; animation: fade-up 0.8s ease 0.5s forwards;
+  }
+  .title span {
+    background: linear-gradient(130deg, #c5d5ff, #7c6af5);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    font-size: 28px; color: #7a8099; margin-top: 14px; font-weight: 400;
+    opacity: 0; animation: fade-up 0.8s ease 0.9s forwards;
+  }
+  .version {
+    font-size: 16px; color: #7c6af5; margin-top: 24px; font-weight: 600;
+    padding: 6px 20px; border: 1px solid rgba(124,106,245,0.3); border-radius: 20px;
+    opacity: 0; animation: fade-up 0.6s ease 1.3s forwards;
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <div class="logo-icon">&#x1F5C2;&#xFE0F;</div>
+  <h1 class="title"><span>gTabs</span></h1>
+  <p class="subtitle">AI Tab Organizer for Chrome</p>
+  <div class="version">v0.4 &mdash; Smart Learning</div>
+</body>
+</html>

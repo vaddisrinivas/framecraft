@@ -1,32 +1,31 @@
 # framecraft
 
-Demo video creation tool. HTML scenes + headless Chrome + ffmpeg + macOS TTS.
+Claude skill + MCP config for demo video creation. Not a framework — stitches existing tools together.
 
 ## Architecture
 
-- `framecraft.py` — Core engine: HTML generation, Playwright frame rendering, ffmpeg compositing, TTS
-- `framecraft_mcp.py` — MCP server exposing tools for Claude integration
-- `.claude/skills/demo-video.md` — Claude skill for triggering video creation
+- `SKILL.md` — The brain. Tells Claude the workflow, scene format, and voice options.
+- `mcp.json` — Declares MCP dependencies: playwright, ffmpeg, edge-tts.
+- `framecraft.py` — Atomic pipeline + validator. Fallback when MCPs aren't available.
+- `framecraft_mcp.py` — MCP server wrapping the pipeline as tools.
+- `templates/` — Reusable HTML scenes (from gTabs demo). Copy and customize.
+- `examples/` — Real working config: gTabs v0.4 demo.
 
-## Running the MCP server
+## Two modes
+
+1. **Claude-driven**: Skill tells Claude to orchestrate playwright-mcp + ffmpeg-mcp + edge-tts-mcp directly.
+2. **Pipeline fallback**: `uv run python framecraft.py scenes.json --auto-duration` does everything atomically.
+
+## CLI
 
 ```bash
-uv run python framecraft_mcp.py
-```
-
-## Running as CLI
-
-```bash
-uv run python framecraft.py scenes.json --output demo.mp4
+uv run python framecraft.py scenes.json                  # render all
+uv run python framecraft.py scenes.json --scene 2        # one scene
+uv run python framecraft.py scenes.json --auto-duration  # duration from TTS
+uv run python framecraft.py --validate output.mp4        # check quality
 ```
 
 ## Prerequisites
 
-- Python 3.11+
-- ffmpeg (brew install ffmpeg)
-- macOS `say` for TTS
-- Playwright chromium (installed via `uv run playwright install chromium`)
-
-## Pipeline
-
-HTML scenes (CSS animations) → Playwright screenshots at 30fps → ffmpeg concat + crossfade → mix TTS audio → MP4
+- ffmpeg, Python 3.11+, internet for edge-tts
+- Playwright chromium: `uv run playwright install chromium`

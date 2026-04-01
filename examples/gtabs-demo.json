@@ -1,62 +1,58 @@
 {
+  "_reference_output": "https://github.com/vaddisrinivas/gtabs/blob/main/store-assets/demo-v04.gif",
   "scenes": [
     {
-      "title": "gTabs",
-      "subtitle": "AI Tab Organizer for Chrome",
-      "narration": "Meet gTabs. One click organizes all your Chrome tabs with AI.",
-      "duration": 4.0,
-      "animation": "fade",
-      "bg_color": "#0d0e12",
-      "title_color": "#c5d5ff",
-      "subtitle_color": "#7c6af5"
+      "custom_html": "./templates/title-card.html",
+      "narration": "Meet gTabs. The AI tab organizer for Chrome.",
+      "duration": 0
     },
     {
-      "title": "One click. Perfectly organized.",
-      "screenshot": "/Users/srinivasvaddi/Projects/gtabs/store-assets/screenshot-organized-1280x800.png",
-      "narration": "Color-coded tab groups, created by AI, editable before you apply.",
-      "duration": 5.0,
-      "animation": "slide-up",
-      "screenshot_animation": "scale"
+      "custom_html": "./templates/browser-mockup.html",
+      "narration": "You have twenty four tabs open. You can't find anything. Sound familiar?",
+      "duration": 0
     },
     {
-      "title": "Learns from every interaction",
-      "screenshot": "/Users/srinivasvaddi/Projects/gtabs/store-assets/screenshot-smart-learning-1280x800.png",
-      "narration": "Corrections count triple. Rejections are remembered for 30 days. Domain affinity decays over 14 days.",
+      "custom_html": "./templates/browser-groups.html",
+      "narration": "One click on gTabs, and your tabs organize themselves into color coded groups. Dev, Media, Comms. Instantly.",
+      "duration": 0
+    },
+    {
+      "title": "It learns from you",
+      "screenshot": "./path/to/screenshot-smart-learning.png",
+      "narration": "Every correction you make counts triple. Every rejected group is remembered for thirty days. gTabs gets smarter the more you use it.",
       "bullets": ["Corrections 3x", "Rejections 30d", "14-day decay"],
-      "duration": 6.0,
+      "duration": 0,
       "animation": "slide-up",
-      "screenshot_animation": "fade"
+      "screenshot_animation": "scale"
     },
     {
-      "title": "8 LLM Providers. 3 Free.",
-      "screenshot": "/Users/srinivasvaddi/Projects/gtabs/store-assets/screenshot-settings-1280x800.png",
-      "narration": "Works with Groq, OpenRouter, and Ollama for free. Or use Anthropic, OpenAI, and more.",
-      "duration": 5.0,
+      "title": "8 providers. 3 completely free.",
+      "screenshot": "./path/to/screenshot-settings.png",
+      "narration": "Works with Groq, OpenRouter, and Ollama for free. Or bring your own key for Claude, GPT, and more.",
+      "duration": 0,
       "animation": "fade",
       "screenshot_animation": "scale"
     },
     {
-      "title": "Scheduled Re-org. Pinned Groups.",
-      "screenshot": "/Users/srinivasvaddi/Projects/gtabs/store-assets/screenshot-pinned-groups-1280x800.png",
-      "narration": "Set daily re-organization. Pin your important groups so they survive every re-org.",
+      "title": "Schedule it. Pin it. Forget it.",
+      "screenshot": "./path/to/screenshot-pinned-groups.png",
+      "narration": "Set daily re-organization. Pin your important groups. They survive every re-org automatically.",
       "bullets": ["Daily schedule", "Pinned groups", "Drift detection"],
-      "duration": 5.0,
+      "duration": 0,
       "animation": "slide-up",
       "screenshot_animation": "fade"
     },
     {
-      "title": "gTabs",
-      "subtitle": "github.com/vaddisrinivas/gtabs",
-      "narration": "gTabs. Open source. Try it now.",
-      "duration": 4.0,
-      "animation": "fade"
+      "custom_html": "./templates/end-card.html",
+      "narration": "gTabs. Open source, free, and ready to try. Star it on GitHub.",
+      "duration": 0
     }
   ],
-  "output": "/Users/srinivasvaddi/Projects/gtabs/store-assets/demo-v04.mp4",
+  "output": "./output/demo.mp4",
   "width": 1920,
   "height": 1080,
-  "fps": 30,
-  "voice": "Samantha",
+  "fps": 24,
+  "voice": "andrew",
   "transition": "crossfade",
-  "transition_duration": 0.5
+  "transition_duration": 0.4
 }
