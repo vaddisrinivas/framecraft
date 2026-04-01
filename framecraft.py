@@ -57,6 +57,7 @@ class Scene:
     zoom_to: str = ""                  # CSS region to zoom into: "x% y% scale" e.g. "50% 30% 1.5"
     title_size: int = 48               # font-size for title
     layout: str = "center"             # center | left | split
+    custom_html: str = ""              # path to custom HTML file (overrides all other visual fields)
 
     @classmethod
     def from_dict(cls, d: dict) -> "Scene":
@@ -508,11 +509,14 @@ def render_demo(config: DemoConfig) -> str:
     audio_files = []
 
     for i, scene in enumerate(config.scenes):
-        # 1. Generate HTML
-        html_content = generate_scene_html(scene, config.width, config.height)
-        html_path = os.path.join(html_dir, f"scene{i:02d}.html")
-        with open(html_path, "w") as f:
-            f.write(html_content)
+        # 1. Generate HTML (use custom_html file if provided)
+        if scene.custom_html and os.path.exists(scene.custom_html):
+            html_path = os.path.abspath(scene.custom_html)
+        else:
+            html_content = generate_scene_html(scene, config.width, config.height)
+            html_path = os.path.join(html_dir, f"scene{i:02d}.html")
+            with open(html_path, "w") as f:
+                f.write(html_content)
 
         # 2. Render frames
         count = render_scene_frames(
