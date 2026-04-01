@@ -28,6 +28,16 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 @dataclass
+class Callout:
+    """An annotation arrow/label pointing at a region of the screenshot."""
+    text: str = ""
+    x: int = 0           # % from left (0-100)
+    y: int = 0           # % from top (0-100)
+    color: str = "#7c6af5"
+    delay: float = 1.0   # seconds before appearing
+
+
+@dataclass
 class Scene:
     """A single scene in the demo video."""
     title: str = ""
@@ -35,6 +45,7 @@ class Scene:
     narration: str = ""
     screenshot: str = ""               # path to screenshot image
     bullets: list[str] = field(default_factory=list)
+    callouts: list[dict] = field(default_factory=list)  # list of Callout-like dicts
     duration: float = 4.0              # seconds
     bg_color: str = "#0d0e12"
     title_color: str = "#c5d5ff"
@@ -43,6 +54,9 @@ class Scene:
     accent_color: str = "#7c6af5"
     animation: str = "fade"            # fade | slide-up | scale | none
     screenshot_animation: str = "scale" # scale | fade | slide-up | none
+    zoom_to: str = ""                  # CSS region to zoom into: "x% y% scale" e.g. "50% 30% 1.5"
+    title_size: int = 48               # font-size for title
+    layout: str = "center"             # center | left | split
 
     @classmethod
     def from_dict(cls, d: dict) -> "Scene":
@@ -266,21 +280,92 @@ def render_scene_frames(
 
 
 # ---------------------------------------------------------------------------
-# TTS — macOS `say`
+# TTS — edge-tts (natural neural voices) with macOS `say` fallback
 # ---------------------------------------------------------------------------
 
+# Best edge-tts voices for demo narration
+EDGE_TTS_VOICES = {
+    # Natural, warm, professional
+    "guy": "en-US-GuyNeural",
+    "jenny": "en-US-JennyNeural",
+    "aria": "en-US-AriaNeural",
+    "davis": "en-US-DavisNeural",
+    "amber": "en-US-AmberNeural",
+    "andrew": "en-US-AndrewNeural",
+    "emma": "en-US-EmmaNeural",
+    "brian": "en-US-BrianNeural",
+    # British
+    "ryan": "en-GB-RyanNeural",
+    "sonia": "en-GB-SoniaNeural",
+}
+
+DEFAULT_VOICE = "en-US-AndrewNeural"
+
+
+def _resolve_voice(voice: str) -> str:
+    """Resolve a short voice name to a full edge-tts voice ID."""
+    if voice in EDGE_TTS_VOICES:
+        return EDGE_TTS_VOICES[voice]
+    # If it looks like a full edge-tts voice ID, use as-is
+    if "-" in voice and "Neural" in voice:
+        return voice
+    # Default
+    return DEFAULT_VOICE
+
+
 def generate_voiceover(text: str, voice: str, output_path: str) -> str:
-    """Generate voiceover audio using macOS say. Returns path to .wav file."""
+    """Generate voiceover audio. Uses edge-tts (neural voices) with macOS say fallback."""
     if not text.strip():
         return ""
 
-    aiff_path = output_path.replace(".wav", ".aiff")
+    # Try edge-tts first (natural neural voices)
+    try:
+        return _generate_edge_tts(text, voice, output_path)
+    except Exception:
+        pass
+
+    # Fallback to macOS say
+    try:
+        return _generate_macos_say(text, voice, output_path)
+    except Exception:
+        return ""
+
+
+def _generate_edge_tts(text: str, voice: str, output_path: str) -> str:
+    """Generate voiceover using edge-tts (Microsoft neural voices)."""
+    import asyncio
+    import edge_tts
+
+    resolved_voice = _resolve_voice(voice)
+    mp3_path = output_path.replace(".wav", ".mp3")
+
+    async def _run():
+        communicate = edge_tts.Communicate(text, resolved_voice)
+        await communicate.save(mp3_path)
+
+    asyncio.run(_run())
+
+    # Convert mp3 to wav for consistent ffmpeg pipeline
     subprocess.run(
-        ["say", "-v", voice, "-o", aiff_path, text],
+        ["ffmpeg", "-y", "-i", mp3_path, "-ar", "44100", "-ac", "1", output_path],
         check=True, capture_output=True,
     )
+    os.remove(mp3_path)
+    return output_path
 
-    # Convert to wav for ffmpeg compatibility
+
+def _generate_macos_say(text: str, voice: str, output_path: str) -> str:
+    """Fallback: generate voiceover using macOS say."""
+    aiff_path = output_path.replace(".wav", ".aiff")
+    # Map edge-tts voice names to macOS voices
+    mac_voice = "Samantha"
+    if "guy" in voice.lower() or "andrew" in voice.lower() or "davis" in voice.lower():
+        mac_voice = "Daniel"
+
+    subprocess.run(
+        ["say", "-v", mac_voice, "-o", aiff_path, text],
+        check=True, capture_output=True,
+    )
     subprocess.run(
         ["ffmpeg", "-y", "-i", aiff_path, "-ar", "44100", "-ac", "1", output_path],
         check=True, capture_output=True,
