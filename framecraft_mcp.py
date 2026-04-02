@@ -315,5 +315,75 @@ def get_scene_template() -> str:
     return json.dumps(template, indent=2)
 
 
+@mcp.tool()
+def validate_video_output(video_path: str) -> str:
+    """Validate a rendered video file for quality issues.
+
+    Checks: video/audio streams exist, resolution, black frames, file size.
+
+    Args:
+        video_path: Absolute path to the MP4 file to validate
+    """
+    from framecraft import validate_video
+    checks = validate_video(video_path)
+    lines = []
+    for k, v in checks.items():
+        if k == "passed":
+            continue
+        lines.append(f"  {k}: {v}")
+    passed = checks.get("passed", False)
+    lines.append(f"\n  {'PASSED' if passed else 'FAILED'}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def init_project(
+    directory: str,
+    product: str = "My Product",
+    tagline: str = "",
+    url: str = "",
+) -> str:
+    """Scaffold a new framecraft demo project with scenes.json template.
+
+    Creates directory structure with placeholder scenes.json, screenshots/ folder,
+    and scene.css reference.
+
+    Args:
+        directory: Path to create the project in
+        product: Product name (used in template)
+        tagline: Product tagline
+        url: Product URL (GitHub, website, etc.)
+    """
+    from framecraft import init_project as _init
+    path = _init(directory, product, tagline, url)
+    return (
+        f"Project scaffolded: {directory}/\n"
+        f"  scenes.json: {path}\n"
+        f"  screenshots/  — drop your PNGs here\n"
+        f"  scenes/       — custom HTML scenes go here\n"
+        f"\nNext: edit scenes.json, add screenshots, then render."
+    )
+
+
+@mcp.tool()
+def export_all_formats(video_path: str, output_dir: str = "") -> str:
+    """Export a rendered video to multiple platform-optimized formats.
+
+    Generates: GitHub GIF (640x360), Twitter MP4 (1280x720), LinkedIn MP4, thumbnail PNG.
+
+    Args:
+        video_path: Path to the rendered MP4
+        output_dir: Directory for outputs (defaults to same as input)
+    """
+    from framecraft import export_all_formats as _export
+    outputs = _export(video_path, output_dir)
+    lines = ["Exported formats:"]
+    for platform, path in outputs.items():
+        import os
+        size = os.path.getsize(path) / 1024
+        lines.append(f"  {platform}: {path} ({size:.0f}KB)")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
