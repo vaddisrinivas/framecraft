@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #111318;
+    background-image:
+      radial-gradient(ellipse at 20% 40%, rgba(124,106,245,0.1) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 60%, rgba(79,139,255,0.06) 0%, transparent 50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+    gap: 48px;
+  }
+
+  .title {
+    font-size: 40px; font-weight: 800; color: #fff;
+    opacity: 0; animation: fade-up 0.6s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+  }
+
+  /* Pipeline flow: JSON → HTML → Playwright → TTS → FFmpeg → MP4 */
+  .pipeline {
+    display: flex; align-items: center; gap: 0;
+  }
+
+  .stage {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    opacity: 0;
+  }
+  .stage:nth-child(1)  { animation: stage-in 0.6s cubic-bezier(0.16,1,0.3,1) 0.5s forwards; }
+  .stage:nth-child(3)  { animation: stage-in 0.6s cubic-bezier(0.16,1,0.3,1) 1.0s forwards; }
+  .stage:nth-child(5)  { animation: stage-in 0.6s cubic-bezier(0.16,1,0.3,1) 1.5s forwards; }
+  .stage:nth-child(7)  { animation: stage-in 0.6s cubic-bezier(0.16,1,0.3,1) 2.0s forwards; }
+  .stage:nth-child(9)  { animation: stage-in 0.6s cubic-bezier(0.16,1,0.3,1) 2.5s forwards; }
+  .stage:nth-child(11) { animation: stage-in 0.6s cubic-bezier(0.16,1,0.3,1) 3.0s forwards; }
+
+  @keyframes stage-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .stage-box {
+    width: 160px; height: 160px;
+    border-radius: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px;
+    position: relative;
+  }
+  .stage-icon { font-size: 44px; }
+  .stage-label {
+    font-size: 14px; font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .stage-desc {
+    font-size: 12px; color: #555a70; text-align: center;
+    max-width: 140px; line-height: 1.4;
+  }
+
+  /* Individual stage colors */
+  .s-json .stage-box {
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.2);
+  }
+  .s-json .stage-label { color: #fbbf24; }
+
+  .s-html .stage-box {
+    background: rgba(124,106,245,0.08);
+    border: 1px solid rgba(124,106,245,0.2);
+  }
+  .s-html .stage-label { color: #7c6af5; }
+
+  .s-playwright .stage-box {
+    background: rgba(79,139,255,0.08);
+    border: 1px solid rgba(79,139,255,0.2);
+  }
+  .s-playwright .stage-label { color: #4f8bff; }
+
+  .s-tts .stage-box {
+    background: rgba(74,222,128,0.08);
+    border: 1px solid rgba(74,222,128,0.2);
+  }
+  .s-tts .stage-label { color: #4ade80; }
+
+  .s-ffmpeg .stage-box {
+    background: rgba(242,139,130,0.08);
+    border: 1px solid rgba(242,139,130,0.2);
+  }
+  .s-ffmpeg .stage-label { color: #f28b82; }
+
+  .s-video .stage-box {
+    background: rgba(197,213,255,0.1);
+    border: 1px solid rgba(197,213,255,0.25);
+    box-shadow: 0 0 30px rgba(124,106,245,0.1);
+  }
+  .s-video .stage-label { color: #c5d5ff; }
+
+  /* Arrows between stages */
+  .arrow {
+    font-size: 24px; color: #333;
+    margin: 0 8px;
+    opacity: 0;
+  }
+  .arrow:nth-child(2)  { animation: arrow-in 0.3s ease 0.9s forwards; }
+  .arrow:nth-child(4)  { animation: arrow-in 0.3s ease 1.4s forwards; }
+  .arrow:nth-child(6)  { animation: arrow-in 0.3s ease 1.9s forwards; }
+  .arrow:nth-child(8)  { animation: arrow-in 0.3s ease 2.4s forwards; }
+  .arrow:nth-child(10) { animation: arrow-in 0.3s ease 2.9s forwards; }
+
+  @keyframes arrow-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 0.6; transform: translateX(0); }
+  }
+
+  /* Bottom row: 3 modes */
+  .modes {
+    display: flex; gap: 24px;
+    opacity: 0;
+    animation: fade-up 0.6s ease 3.5s forwards;
+  }
+  .mode {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 24px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .mode-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .mode-text {
+    font-size: 14px; color: #7a8099; font-weight: 600;
+  }
+  .mode-sub {
+    font-size: 12px; color: #555;
+  }
+  .md1 .mode-dot { background: #7c6af5; }
+  .md2 .mode-dot { background: #4ade80; }
+  .md3 .mode-dot { background: #fbbf24; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <h1 class="title">What your LLM gets to work with</h1>
+
+  <div class="pipeline">
+    <div class="stage s-json">
+      <div class="stage-box">
+        <span class="stage-icon">{&thinsp;}</span>
+        <span class="stage-label">JSON</span>
+      </div>
+      <span class="stage-desc">Scene config + narration text</span>
+    </div>
+    <span class="arrow">&#x2192;</span>
+
+    <div class="stage s-html">
+      <div class="stage-box">
+        <span class="stage-icon">&lt;/&gt;</span>
+        <span class="stage-label">HTML</span>
+      </div>
+      <span class="stage-desc">Custom scenes with CSS animations</span>
+    </div>
+    <span class="arrow">&#x2192;</span>
+
+    <div class="stage s-playwright">
+      <div class="stage-box">
+        <span class="stage-icon">&#128247;</span>
+        <span class="stage-label">Playwright</span>
+      </div>
+      <span class="stage-desc">Frame-by-frame screenshot capture</span>
+    </div>
+    <span class="arrow">&#x2192;</span>
+
+    <div class="stage s-tts">
+      <div class="stage-box">
+        <span class="stage-icon">&#127908;</span>
+        <span class="stage-label">Edge TTS</span>
+      </div>
+      <span class="stage-desc">Neural voiceover, 10 voices, free</span>
+    </div>
+    <span class="arrow">&#x2192;</span>
+
+    <div class="stage s-ffmpeg">
+      <div class="stage-box">
+        <span class="stage-icon">&#127910;</span>
+        <span class="stage-label">FFmpeg</span>
+      </div>
+      <span class="stage-desc">Composite, crossfade, audio mix</span>
+    </div>
+    <span class="arrow">&#x2192;</span>
+
+    <div class="stage s-video">
+      <div class="stage-box">
+        <span class="stage-icon">&#9654;</span>
+        <span class="stage-label">MP4</span>
+      </div>
+      <span class="stage-desc">1920x1080, validated, ready to ship</span>
+    </div>
+  </div>
+
+  <div class="modes">
+    <div class="mode md1">
+      <div class="mode-dot"></div>
+      <div>
+        <div class="mode-text">LLM Skill &amp; Plugin</div>
+        <div class="mode-sub">MCP orchestration</div>
+      </div>
+    </div>
+    <div class="mode md2">
+      <div class="mode-dot"></div>
+      <div>
+        <div class="mode-text">CLI Pipeline</div>
+        <div class="mode-sub">One command, atomic</div>
+      </div>
+    </div>
+    <div class="mode md3">
+      <div class="mode-dot"></div>
+      <div>
+        <div class="mode-text">MCP Server</div>
+        <div class="mode-sub">Tool-based API</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

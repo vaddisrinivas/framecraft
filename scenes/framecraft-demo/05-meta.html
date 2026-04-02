@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #111318;
+    background-image:
+      radial-gradient(ellipse at 50% 50%, rgba(124,106,245,0.12) 0%, transparent 50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+    gap: 36px;
+  }
+
+  /* The big reveal */
+  .reveal-text {
+    font-size: 44px; font-weight: 800; color: #fff;
+    text-align: center; line-height: 1.4;
+    opacity: 0;
+    animation: fade-up 0.8s cubic-bezier(0.16,1,0.3,1) 0.3s forwards;
+  }
+  .reveal-text .hl {
+    background: linear-gradient(130deg, #c5d5ff, #7c6af5);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  /* Scene thumbnails showing THIS video's scenes */
+  .filmstrip {
+    display: flex; gap: 16px;
+    opacity: 0;
+    animation: strip-in 1s cubic-bezier(0.16,1,0.3,1) 1.0s forwards;
+  }
+  @keyframes strip-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .thumb {
+    width: 240px; height: 135px;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+  }
+  .thumb:nth-child(1) { animation: thumb-in 0.5s cubic-bezier(0.16,1,0.3,1) 1.2s forwards; }
+  .thumb:nth-child(2) { animation: thumb-in 0.5s cubic-bezier(0.16,1,0.3,1) 1.4s forwards; }
+  .thumb:nth-child(3) { animation: thumb-in 0.5s cubic-bezier(0.16,1,0.3,1) 1.6s forwards; }
+  .thumb:nth-child(4) { animation: thumb-in 0.5s cubic-bezier(0.16,1,0.3,1) 1.8s forwards; }
+  .thumb:nth-child(5) { animation: thumb-in 0.5s cubic-bezier(0.16,1,0.3,1) 2.0s forwards; }
+  .thumb:nth-child(6) { animation: thumb-in 0.5s cubic-bezier(0.16,1,0.3,1) 2.2s forwards; }
+
+  @keyframes thumb-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .thumb-inner {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+  }
+
+  .t1 .thumb-inner {
+    background: linear-gradient(135deg, #0a0a12, #12132a);
+    color: #7c6af5;
+  }
+  .t2 .thumb-inner {
+    background: linear-gradient(135deg, #0a0a0f, #1a0a0a);
+    color: #f28b82;
+  }
+  .t3 .thumb-inner {
+    background: linear-gradient(135deg, #0a0c12, #0d1018);
+    color: #4ade80;
+  }
+  .t4 .thumb-inner {
+    background: linear-gradient(135deg, #0d0e14, #0e1018);
+    color: #4f8bff;
+  }
+  .t5 .thumb-inner {
+    background: linear-gradient(135deg, #08080e, #141428);
+    color: #c5d5ff;
+  }
+  .t6 .thumb-inner {
+    background: linear-gradient(135deg, #050510, #0e0e20);
+    color: #7c6af5;
+  }
+
+  /* Current playing indicator */
+  .thumb.active .thumb-inner {
+    border-color: rgba(124,106,245,0.5);
+    box-shadow: 0 0 20px rgba(124,106,245,0.2);
+  }
+  .thumb.active::after {
+    content: '&#9654; NOW';
+    position: absolute;
+    bottom: 6px; right: 8px;
+    font-size: 9px; font-weight: 700; color: #7c6af5;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.7);
+    padding: 2px 6px; border-radius: 4px;
+    opacity: 0;
+    animation: now-in 0.4s ease 2.5s forwards;
+  }
+  @keyframes now-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Scene numbers */
+  .thumb::before {
+    content: attr(data-num);
+    position: absolute;
+    top: 6px; left: 8px;
+    font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.3);
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 6px; border-radius: 4px;
+  }
+
+  .meta-line {
+    font-size: 22px; color: #555a70; font-weight: 400;
+    opacity: 0;
+    animation: fade-up 0.6s ease 2.8s forwards;
+  }
+  .meta-line em {
+    font-style: normal; color: #7a8099; font-weight: 600;
+  }
+
+  /* Glow behind the filmstrip */
+  .filmstrip-glow {
+    position: absolute;
+    width: 1600px; height: 200px;
+    background: radial-gradient(ellipse, rgba(124,106,245,0.06) 0%, transparent 70%);
+    filter: blur(40px);
+    z-index: 0;
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <div class="reveal-text">
+    This video you're watching right now?<br>
+    <span class="hl">Made with framecraft.</span>
+  </div>
+
+  <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+    <div class="filmstrip-glow"></div>
+    <div class="filmstrip">
+      <div class="thumb t1" data-num="01"><div class="thumb-inner">portal.html</div></div>
+      <div class="thumb t2" data-num="02"><div class="thumb-inner">problem.html</div></div>
+      <div class="thumb t3" data-num="03"><div class="thumb-inner">terminal.html</div></div>
+      <div class="thumb t4" data-num="04"><div class="thumb-inner">pipeline.html</div></div>
+      <div class="thumb t5 active" data-num="05"><div class="thumb-inner">meta.html</div></div>
+      <div class="thumb t6" data-num="06"><div class="thumb-inner">endcard.html</div></div>
+    </div>
+  </div>
+
+  <p class="meta-line">One prompt to your LLM. 6 HTML scenes generated. <em>Zero screen recording.</em></p>
+</body>
+</html>

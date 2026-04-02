@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #111318;
+    background-image:
+      radial-gradient(ellipse at 50% 50%, rgba(124,106,245,0.1) 0%, transparent 50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif;
+    gap: 32px;
+  }
+
+  .header {
+    font-size: 36px; font-weight: 800; color: #fff;
+    opacity: 0; animation: fade-up 0.6s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+  }
+  .header span {
+    background: linear-gradient(130deg, #c5d5ff, #7c6af5);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  /* Chat-style interface */
+  .chat {
+    width: 1100px;
+    background: #111318;
+    border-radius: 14px;
+    box-shadow:
+      0 30px 80px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 0 60px rgba(124,106,245,0.06);
+    overflow: hidden;
+    opacity: 0;
+    animation: chat-in 0.8s cubic-bezier(0.16,1,0.3,1) 0.4s forwards;
+  }
+  @keyframes chat-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .chat-bar {
+    background: #1e2028;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .chat-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #7c6af5, #4f8bff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #fff; font-weight: 800;
+  }
+  .chat-title {
+    font-size: 14px; color: #c5d5ff; font-weight: 600;
+    font-family: 'Inter', sans-serif;
+  }
+  .chat-badge {
+    font-size: 11px; color: #7c6af5; font-weight: 600;
+    padding: 3px 10px;
+    border: 1px solid rgba(124,106,245,0.2);
+    border-radius: 12px;
+    margin-left: 4px;
+  }
+
+  .chat-body {
+    padding: 24px 28px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  /* User message */
+  .msg {
+    display: flex; gap: 14px;
+    opacity: 0;
+  }
+  .msg-user { animation: msg-in 0.5s cubic-bezier(0.16,1,0.3,1) 0.8s forwards; }
+
+  .avatar {
+    width: 32px; height: 32px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .avatar-user {
+    background: rgba(251,191,36,0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.2);
+  }
+  .avatar-llm {
+    background: linear-gradient(135deg, rgba(124,106,245,0.2), rgba(79,139,255,0.15));
+    color: #c5d5ff;
+    border: 1px solid rgba(124,106,245,0.2);
+  }
+
+  .msg-content {
+    font-size: 15px; line-height: 1.6;
+    padding: 12px 18px;
+    border-radius: 12px;
+    max-width: 800px;
+  }
+  .msg-user .msg-content {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #ddd;
+  }
+
+  /* LLM response */
+  .msg-llm { animation: msg-in 0.5s cubic-bezier(0.16,1,0.3,1) 1.5s forwards; }
+  .msg-llm .msg-content {
+    background: rgba(124,106,245,0.06);
+    border: 1px solid rgba(124,106,245,0.1);
+    color: #b8c0d4;
+  }
+
+  /* LLM action steps */
+  .steps {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .step {
+    display: flex; align-items: center; gap: 10px;
+    opacity: 0;
+  }
+  .step:nth-child(1) { animation: step-in 0.3s ease 2.0s forwards; }
+  .step:nth-child(2) { animation: step-in 0.3s ease 2.4s forwards; }
+  .step:nth-child(3) { animation: step-in 0.3s ease 2.8s forwards; }
+  .step:nth-child(4) { animation: step-in 0.3s ease 3.2s forwards; }
+  .step:nth-child(5) { animation: step-in 0.3s ease 3.6s forwards; }
+  .step:nth-child(6) { animation: step-in 0.3s ease 4.0s forwards; }
+
+  @keyframes step-in {
+    from { opacity: 0; transform: translateX(-6px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .step-check { color: #4ade80; font-size: 14px; }
+  .step-spin {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(124,106,245,0.3);
+    border-top-color: #7c6af5;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .step-text { color: #7a8099; }
+  .step-hl { color: #c5d5ff; font-weight: 600; }
+  .step-file { color: #fbbf24; }
+  .step-done { color: #4ade80; font-weight: 600; }
+
+  /* Final output */
+  .output-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 6px;
+    opacity: 0;
+    animation: msg-in 0.4s cubic-bezier(0.16,1,0.3,1) 4.5s forwards;
+  }
+  .output-badge {
+    font-size: 12px; font-weight: 700; color: #4ade80;
+    padding: 4px 12px;
+    background: rgba(74,222,128,0.1);
+    border: 1px solid rgba(74,222,128,0.2);
+    border-radius: 8px;
+  }
+  .output-file {
+    font-size: 13px; color: #c5d5ff; font-family: 'JetBrains Mono', monospace; font-weight: 600;
+  }
+  .output-meta {
+    font-size: 12px; color: #555;
+  }
+
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <h1 class="header">You talk. <span>It builds.</span></h1>
+
+  <div class="chat">
+    <div class="chat-bar">
+      <div class="chat-icon">C</div>
+      <span class="chat-title">LLM Chat</span>
+      <span class="chat-badge">framecraft skill &amp; plugin</span>
+    </div>
+    <div class="chat-body">
+      <!-- User prompt -->
+      <div class="msg msg-user">
+        <div class="avatar avatar-user">S</div>
+        <div class="msg-content">
+          Make a demo video for my tab organizer extension. Show the messy tabs, then the organized groups. End with a GitHub CTA.
+        </div>
+      </div>
+
+      <!-- LLM response -->
+      <div class="msg msg-llm">
+        <div class="avatar avatar-llm">AI</div>
+        <div class="msg-content">
+          I'll create a 6-scene demo with custom HTML animations, voiceover, and transitions.
+          <div class="steps">
+            <div class="step">
+              <span class="step-check">&#10003;</span>
+              <span class="step-text">Wrote</span>
+              <span class="step-file">portal.html</span>
+              <span class="step-text">&#x2014; title card with gradient animation</span>
+            </div>
+            <div class="step">
+              <span class="step-check">&#10003;</span>
+              <span class="step-text">Wrote</span>
+              <span class="step-file">messy-tabs.html</span>
+              <span class="step-text">&#x2014; 24 chaotic tabs, red counter</span>
+            </div>
+            <div class="step">
+              <span class="step-check">&#10003;</span>
+              <span class="step-text">Wrote</span>
+              <span class="step-file">organized.html</span>
+              <span class="step-text">&#x2014; color-coded groups with badges</span>
+            </div>
+            <div class="step">
+              <span class="step-check">&#10003;</span>
+              <span class="step-text">Wrote</span>
+              <span class="step-file">scenes.json</span>
+              <span class="step-text">&#x2014; config, narration, andrew voice</span>
+            </div>
+            <div class="step">
+              <span class="step-check">&#10003;</span>
+              <span class="step-text">Rendered</span>
+              <span class="step-hl">6 scenes</span>
+              <span class="step-text">&#x2014; 1111 frames captured</span>
+            </div>
+            <div class="step">
+              <span class="step-check">&#10003;</span>
+              <span class="step-done">Composited &amp; validated</span>
+            </div>
+          </div>
+          <div class="output-row">
+            <span class="output-badge">PASSED</span>
+            <span class="output-file">output/demo.mp4</span>
+            <span class="output-meta">&#x2014; 46s, 3.0MB, 1920x1080, h264+aac</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
