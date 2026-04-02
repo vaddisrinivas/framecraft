@@ -4,7 +4,7 @@ An LLM skill & plugin for creating polished demo videos. You describe what you w
 
 **Not a framework.** A pipeline that gives your LLM the tools to produce real video.
 
-https://github.com/user-attachments/assets/framecraft-demo.mp4
+<video src="https://github.com/vaddisrinivas/framecraft/releases/download/v0.5-demo/framecraft-demo.mp4" width="100%" autoplay loop muted playsinline></video>
 
 > *This demo was made with framecraft itself — one prompt, zero screen recording.*
 
