@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "framecraft": {
+      "command": "uv",
+      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "python", "framecraft.py", "serve"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    },
+    "ffmpeg": {
+      "command": "uvx",
+      "args": ["ffmpeg-mcp-lite"]
+    },
+    "edge-tts": {
+      "command": "uvx",
+      "args": ["edge_tts_mcp_server"]
+    }
+  }
+}

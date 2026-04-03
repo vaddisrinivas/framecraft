@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "framecraft",
+  "description": "LLM skill & plugin for creating polished demo videos",
+  "owner": {
+    "name": "vaddisrinivas",
+    "email": "vaddisrinivas@gmail.com"
+  },
+  "metadata": {
+    "description": "Tell your LLM what you want. Get a polished demo video."
+  },
+  "plugins": [
+    {
+      "name": "framecraft",
+      "source": "./",
+      "description": "Orchestrates playwright, ffmpeg, and edge-tts MCPs to produce demo videos from a single prompt",
+      "version": "0.5.0",
+      "author": {
+        "name": "vaddisrinivas",
+        "email": "vaddisrinivas@gmail.com"
+      },
+      "homepage": "https://github.com/vaddisrinivas/framecraft",
+      "repository": "https://github.com/vaddisrinivas/framecraft",
+      "license": "MIT",
+      "keywords": ["video", "demo", "mcp", "tts", "playwright", "ffmpeg"],
+      "category": "productivity",
+      "tags": ["video", "demo", "automation", "mcp"],
+      "strict": false
+    }
+  ]
+}

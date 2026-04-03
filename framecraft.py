@@ -998,6 +998,326 @@ def validate_video(path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# MCP server
+# ---------------------------------------------------------------------------
+
+def _build_mcp_server():
+    """Build and return the FastMCP server with all tools."""
+    from mcp.server.fastmcp import FastMCP
+
+    mcp_server = FastMCP(
+        "framecraft",
+        description="Create polished demo videos from screenshots and scene descriptions",
+    )
+
+    @mcp_server.tool()
+    def create_scene_html(
+        title: str = "",
+        subtitle: str = "",
+        screenshot: str = "",
+        bullets: list[str] | None = None,
+        callouts: list[dict] | None = None,
+        zoom: dict | None = None,
+        bg_color: str = "#0d0e12",
+        animation: str = "fade",
+        title_size: int = 48,
+        width: int = 1920,
+        height: int = 1080,
+        output_path: str = "",
+    ) -> str:
+        """Generate a single HTML scene file with CSS animations.
+
+        Args:
+            title: Main heading text
+            subtitle: Secondary text below the title
+            screenshot: Absolute path to a screenshot image to embed
+            bullets: List of short text bullets displayed below the screenshot
+            callouts: List of callout dicts with keys: text, x (%), y (%), color, delay (s)
+            zoom: Zoom target dict with keys: x (%), y (%), scale, delay (s), duration (s)
+            bg_color: Background color (hex)
+            animation: Text animation type: fade, slide-up, scale, none
+            title_size: Title font size in pixels
+            width: Scene width in pixels
+            height: Scene height in pixels
+            output_path: Where to save the HTML file (auto-generated if empty)
+        """
+        scene = Scene(
+            title=title, subtitle=subtitle, screenshot=screenshot,
+            bullets=bullets or [], callouts=callouts or [], zoom=zoom,
+            bg_color=bg_color, animation=animation, title_size=title_size,
+        )
+        html = generate_scene_html(scene, width, height)
+
+        if not output_path:
+            fd, output_path = tempfile.mkstemp(suffix=".html", prefix="framecraft-scene-")
+            os.close(fd)
+
+        with open(output_path, "w") as f:
+            f.write(html)
+
+        return f"Scene HTML saved to: {output_path}"
+
+    @mcp_server.tool()
+    def preview_scene(
+        title: str = "",
+        subtitle: str = "",
+        screenshot: str = "",
+        bullets: list[str] | None = None,
+        callouts: list[dict] | None = None,
+        zoom: dict | None = None,
+        duration: float = 3.0,
+        width: int = 1920,
+        height: int = 1080,
+        output_path: str = "",
+    ) -> str:
+        """Render a single scene to a PNG image (final frame) for quick preview.
+
+        Args:
+            title: Main heading text
+            subtitle: Secondary text
+            screenshot: Absolute path to a screenshot image
+            bullets: List of bullet text items
+            callouts: List of callout annotation dicts
+            zoom: Zoom target dict
+            duration: Seconds to let CSS animations play before capture
+            width: Scene width in pixels
+            height: Scene height in pixels
+            output_path: Where to save the preview PNG (auto-generated if empty)
+        """
+        scene = Scene(
+            title=title, subtitle=subtitle, screenshot=screenshot,
+            bullets=bullets or [], callouts=callouts or [], zoom=zoom,
+            duration=duration,
+        )
+        html = generate_scene_html(scene, width, height)
+
+        tmp_html = tempfile.mktemp(suffix=".html", prefix="framecraft-")
+        with open(tmp_html, "w") as f:
+            f.write(html)
+
+        if not output_path:
+            fd, output_path = tempfile.mkstemp(suffix=".png", prefix="framecraft-preview-")
+            os.close(fd)
+
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": width, "height": height})
+            page.goto(f"file://{os.path.abspath(tmp_html)}")
+            page.wait_for_timeout(int(duration * 1000))
+            page.screenshot(path=output_path)
+            browser.close()
+
+        os.remove(tmp_html)
+        return f"Preview saved to: {output_path}"
+
+    @mcp_server.tool()
+    def render_video(
+        scenes_json: str,
+        output_path: str = "",
+        scene_index: int = -1,
+        auto_duration: bool = False,
+    ) -> str:
+        """Render a full demo video from a scenes configuration.
+
+        This is the main tool. Pass a JSON string describing all scenes.
+
+        Args:
+            scenes_json: JSON string with the full demo config. Schema:
+                {
+                    "scenes": [
+                        {
+                            "title": "Heading",
+                            "subtitle": "Optional subtitle",
+                            "narration": "Voiceover text",
+                            "voice": "andrew",
+                            "screenshot": "/path/to/image.png",
+                            "bullets": ["Point 1", "Point 2"],
+                            "callouts": [{"text": "Look here", "x": 50, "y": 30, "color": "#4ade80", "delay": 1.0}],
+                            "zoom": {"x": 50, "y": 30, "scale": 1.8, "delay": 1.5, "duration": 1.0},
+                            "duration": 0,
+                            "custom_html": "/path/to/custom.html",
+                            "animation": "fade"
+                        }
+                    ],
+                    "voice": "andrew",
+                    "background_music": "/path/to/music.mp3",
+                    "music_volume": 0.15,
+                    "subtitle_format": "srt",
+                    "transition": "crossfade",
+                    "transition_duration": 0.5
+                }
+
+                Duration 0 = auto-detect from TTS length when auto_duration is true.
+                Per-scene voice overrides the global voice.
+                custom_html overrides all visual fields for that scene.
+
+            output_path: Override the output path from the config
+            scene_index: If >= 0, render only this scene (0-based). -1 = all scenes.
+            auto_duration: Set scene duration automatically from TTS audio length + buffer
+        """
+        config = DemoConfig.from_dict(json.loads(scenes_json))
+        if output_path:
+            config.output = output_path
+
+        sf = scene_index if scene_index >= 0 else None
+        result = render_demo(config, scene_filter=sf, auto_duration=auto_duration)
+
+        file_size = os.path.getsize(result)
+        size_mb = file_size / (1024 * 1024)
+        duration_total = sum(s.duration for s in config.scenes)
+
+        return (
+            f"Video rendered successfully!\n"
+            f"  Output: {result}\n"
+            f"  Scenes: {len(config.scenes)}\n"
+            f"  Duration: ~{duration_total:.0f}s\n"
+            f"  Resolution: {config.width}x{config.height}\n"
+            f"  Size: {size_mb:.1f}MB"
+        )
+
+    @mcp_server.tool()
+    def generate_tts(
+        text: str,
+        voice: str = "andrew",
+        output_path: str = "",
+    ) -> str:
+        """Generate voiceover audio from text using edge-tts neural voices.
+
+        Args:
+            text: The narration text to speak
+            voice: Voice name — short names: andrew, jenny, davis, brian, emma, aria, guy, ryan, sonia.
+                   Or full edge-tts ID like en-US-AndrewNeural.
+            output_path: Where to save the .wav file (auto-generated if empty)
+        """
+        if not output_path:
+            fd, output_path = tempfile.mkstemp(suffix=".wav", prefix="framecraft-tts-")
+            os.close(fd)
+
+        generate_voiceover(text, voice, output_path)
+        dur = get_audio_duration(output_path)
+        file_size = os.path.getsize(output_path)
+        return f"Voiceover saved to: {output_path} ({file_size / 1024:.0f}KB, {dur:.1f}s)"
+
+    @mcp_server.tool()
+    def list_voices() -> str:
+        """List available TTS voices for voiceover generation."""
+        lines = ["Edge-TTS neural voices:"]
+        for short, full in EDGE_TTS_VOICES.items():
+            lines.append(f"  {short:12s} -> {full}")
+        return "\n".join(lines)
+
+    @mcp_server.tool()
+    def get_scene_template() -> str:
+        """Get a complete example scenes.json config to get started."""
+        template = {
+            "scenes": [
+                {
+                    "title": "Your Product",
+                    "subtitle": "Tagline goes here",
+                    "narration": "Introducing Your Product. The best way to do X.",
+                    "duration": 0,
+                    "animation": "fade",
+                },
+                {
+                    "title": "Feature Highlight",
+                    "screenshot": "/absolute/path/to/screenshot.png",
+                    "narration": "This feature does something amazing.",
+                    "voice": "jenny",
+                    "bullets": ["Fast", "Reliable", "Free"],
+                    "callouts": [
+                        {"text": "Click here", "x": 40, "y": 55, "color": "#4ade80", "delay": 1.5},
+                    ],
+                    "zoom": {"x": 40, "y": 55, "scale": 1.8, "delay": 2.0, "duration": 1.0},
+                    "duration": 6.0,
+                    "animation": "slide-up",
+                    "screenshot_animation": "scale",
+                },
+                {
+                    "custom_html": "/absolute/path/to/custom-scene.html",
+                    "narration": "Custom scenes let you use any HTML/CSS.",
+                    "duration": 5.0,
+                },
+                {
+                    "title": "Get Started",
+                    "subtitle": "github.com/you/project",
+                    "narration": "Try it now. Open source.",
+                    "duration": 4.0,
+                    "animation": "fade",
+                },
+            ],
+            "output": "/absolute/path/to/output.mp4",
+            "width": 1920, "height": 1080, "fps": 24,
+            "voice": "andrew",
+            "transition": "crossfade",
+            "transition_duration": 0.4,
+        }
+        return json.dumps(template, indent=2)
+
+    @mcp_server.tool()
+    def validate_video_output(video_path: str) -> str:
+        """Validate a rendered video file for quality issues.
+
+        Checks: video/audio streams exist, resolution, black frames, file size.
+
+        Args:
+            video_path: Absolute path to the MP4 file to validate
+        """
+        checks = validate_video(video_path)
+        lines = []
+        for k, v in checks.items():
+            if k == "passed":
+                continue
+            lines.append(f"  {k}: {v}")
+        passed = checks.get("passed", False)
+        lines.append(f"\n  {'PASSED' if passed else 'FAILED'}")
+        return "\n".join(lines)
+
+    @mcp_server.tool()
+    def mcp_init_project(
+        directory: str,
+        product: str = "My Product",
+        tagline: str = "",
+        url: str = "",
+    ) -> str:
+        """Scaffold a new framecraft demo project with scenes.json template.
+
+        Args:
+            directory: Path to create the project in
+            product: Product name (used in template)
+            tagline: Product tagline
+            url: Product URL (GitHub, website, etc.)
+        """
+        path = init_project(directory, product, tagline, url)
+        return (
+            f"Project scaffolded: {directory}/\n"
+            f"  scenes.json: {path}\n"
+            f"  screenshots/  — drop your PNGs here\n"
+            f"  scenes/       — custom HTML scenes go here\n"
+            f"\nNext: edit scenes.json, add screenshots, then render."
+        )
+
+    @mcp_server.tool()
+    def mcp_export_all_formats(video_path: str, output_dir: str = "") -> str:
+        """Export a rendered video to multiple platform-optimized formats.
+
+        Generates: GitHub GIF (640x360), Twitter MP4 (1280x720), LinkedIn MP4, thumbnail PNG.
+
+        Args:
+            video_path: Path to the rendered MP4
+            output_dir: Directory for outputs (defaults to same as input)
+        """
+        outputs = export_all_formats(video_path, output_dir)
+        lines = ["Exported formats:"]
+        for platform, path in outputs.items():
+            size = os.path.getsize(path) / 1024
+            lines.append(f"  {platform}: {path} ({size:.0f}KB)")
+        return "\n".join(lines)
+
+    return mcp_server
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -1037,6 +1357,9 @@ if __name__ == "__main__":
     p_preview = sub.add_parser("preview", help="Open a scene HTML in browser")
     p_preview.add_argument("html", help="Path to scene HTML file")
 
+    # serve (MCP server)
+    sub.add_parser("serve", help="Start the framecraft MCP server (stdio transport)")
+
     args = parser.parse_args()
 
     # Backward compat: if no subcommand but first arg looks like a .json file, treat as render
@@ -1055,6 +1378,11 @@ if __name__ == "__main__":
         else:
             parser.print_help()
             sys.exit(1)
+
+    if args.command == "serve":
+        server = _build_mcp_server()
+        server.run(transport="stdio")
+        sys.exit(0)
 
     if args.command == "init":
         path = init_project(args.directory, args.product, args.tagline, args.url)

@@ -1,0 +1,323 @@
+name: Plugin Test Suite
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'SKILL.md'
+      - 'skills/**'
+      - 'framecraft.py'
+      - '.mcp.json'
+      - '.claude-plugin/**'
+      - 'templates/**'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test-plugin:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: uv sync && uv run playwright install chromium --with-deps
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Check plugin structure
+        run: |
+          echo "Checking plugin files..."
+          for f in ".claude-plugin/plugin.json" ".claude-plugin/marketplace.json" ".mcp.json" "skills/demo-video/SKILL.md" "framecraft.py"; do
+            if [ -f "$f" ]; then
+              echo "  OK $f"
+            else
+              echo "  MISSING $f"
+              exit 1
+            fi
+          done
+
+      - name: Generate, validate & review demos
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -uo pipefail
+
+          PLUGIN_DIR="$(pwd)"
+          TEST_DIR="$PLUGIN_DIR/.test-runs/${{ github.run_id }}"
+          EXAMPLES_DIR="$PLUGIN_DIR/output/examples"
+          RESULTS_FILE="$TEST_DIR/results.md"
+          mkdir -p "$TEST_DIR" "$EXAMPLES_DIR"
+
+          PASS=0
+          FAIL=0
+
+          SCENARIOS=(
+            "password-manager|VaultKey|Make a 30-second demo video for a password manager browser extension called VaultKey. Show the autofill feature, password generator, and security dashboard. End with a GitHub CTA."
+            "weather-app|SkyPulse|Make a 20-second teaser video for a weather app called SkyPulse. Show the radar view, hourly forecast, and severe weather alerts. Modern dark UI."
+            "cli-tool|turbotest|Make a 30-second demo for a CLI tool called turbotest that runs tests 10x faster using parallel execution. Show before/after terminal comparisons and a speed benchmark."
+            "note-taking|ThinkPad|Make a 25-second demo for a note-taking app called ThinkPad. Show markdown editing, tag organization, and instant search. Minimal clean aesthetic."
+            "api-monitor|PingCraft|Make a 20-second teaser for an API monitoring tool called PingCraft. Show the uptime dashboard, latency graphs, and alert configuration. Developer-focused."
+          )
+
+          # Results table header
+          cat > "$RESULTS_FILE" << 'EOF'
+          # framecraft plugin test results
+
+          | # | Product | Video | Duration | Size | Review | Notes |
+          |---|---------|-------|----------|------|--------|-------|
+          EOF
+
+          EXAMPLE_LINKS=""
+
+          for i in "${!SCENARIOS[@]}"; do
+            IFS='|' read -r SLUG PRODUCT PROMPT <<< "${SCENARIOS[$i]}"
+            NUM=$((i + 1))
+            SCENE_DIR="$TEST_DIR/$SLUG"
+            OUTPUT="$SCENE_DIR/demo.mp4"
+            EXAMPLE_MP4="$EXAMPLES_DIR/${SLUG}.mp4"
+            EXAMPLE_GIF="$EXAMPLES_DIR/${SLUG}.gif"
+            mkdir -p "$SCENE_DIR"
+
+            echo ""
+            echo "=== TEST $NUM/5: $PRODUCT ($SLUG) ==="
+            echo ""
+
+            # --- Generate via Claude + MCPs ---
+            GENERATION_PROMPT="$PROMPT
+
+          Save the output video to: $OUTPUT
+          After rendering, validate it using the framecraft validate_video_output tool.
+          At the very end, print a single line: RESULT: <PASS or FAIL> | <duration in seconds> | <file size in MB>
+          Do NOT ask questions. Just build it."
+
+            if claude -p \
+              --no-session-persistence \
+              --max-budget-usd 3 \
+              --permission-mode bypassPermissions \
+              --plugin-dir "$PLUGIN_DIR" \
+              "$GENERATION_PROMPT" \
+              > "$SCENE_DIR/generation.log" 2>&1; then
+              echo "  Session completed"
+            else
+              echo "  Session failed"
+              echo "| $NUM | $PRODUCT | - | - | - | - | Session failed |" >> "$RESULTS_FILE"
+              FAIL=$((FAIL + 1))
+              continue
+            fi
+
+            # --- Find the video ---
+            if [ ! -f "$OUTPUT" ]; then
+              OUTPUT=$(find "$SCENE_DIR" -name "*.mp4" -type f 2>/dev/null | head -1)
+            fi
+
+            if [ -z "$OUTPUT" ] || [ ! -f "$OUTPUT" ]; then
+              echo "  No video output"
+              echo "| $NUM | $PRODUCT | - | - | - | - | No video output |" >> "$RESULTS_FILE"
+              FAIL=$((FAIL + 1))
+              continue
+            fi
+
+            # --- Validate with ffprobe ---
+            DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUTPUT" 2>/dev/null | cut -d. -f1 || echo "?")
+            SIZE_BYTES=$(stat --printf="%s" "$OUTPUT" 2>/dev/null || echo "0")
+            SIZE_MB=$(echo "scale=1; $SIZE_BYTES / 1048576" | bc 2>/dev/null || echo "?")
+            HAS_VIDEO=$(ffprobe -v error -select_streams v -show_entries stream=codec_name -of csv=p=0 "$OUTPUT" 2>/dev/null || echo "")
+            HAS_AUDIO=$(ffprobe -v error -select_streams a -show_entries stream=codec_name -of csv=p=0 "$OUTPUT" 2>/dev/null || echo "")
+
+            if [ -n "$HAS_VIDEO" ] && [ -n "$HAS_AUDIO" ] && [ "$DURATION" -gt 5 ] 2>/dev/null; then
+              echo "  Validated: ${DURATION}s, ${SIZE_MB}MB"
+            else
+              echo "  Validation issues: video=$HAS_VIDEO audio=$HAS_AUDIO duration=$DURATION"
+            fi
+
+            # --- Copy to examples + generate GIF preview ---
+            cp "$OUTPUT" "$EXAMPLE_MP4"
+            ffmpeg -y -i "$OUTPUT" \
+              -vf "fps=12,scale=640:360:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+              "$EXAMPLE_GIF" 2>/dev/null || true
+
+            # --- LLM review ---
+            echo "  Reviewing..."
+            REVIEW_PROMPT="You are a video production reviewer. A demo video was generated for '$PRODUCT'.
+
+          Generation log (last 200 lines):
+          $(tail -200 "$SCENE_DIR/generation.log" 2>/dev/null)
+
+          The video is ${DURATION}s long, ${SIZE_MB}MB, 1920x1080 with voiceover.
+
+          Score 1-10 for each. Be honest and critical.
+
+          Respond in EXACTLY this format (no other text):
+          VISUAL: <1-10>
+          STORY: <1-10>
+          PACING: <1-10>
+          NARRATION: <1-10>
+          OVERALL: <1-10>
+          NOTES: <one line summary>"
+
+            REVIEW=$(claude -p \
+              --no-session-persistence \
+              --model sonnet \
+              --max-budget-usd 0.5 \
+              "$REVIEW_PROMPT" 2>/dev/null || echo "OVERALL: ?
+          NOTES: Review failed")
+
+            OVERALL=$(echo "$REVIEW" | grep -o 'OVERALL: [0-9]*' | grep -o '[0-9]*' || echo "?")
+            NOTES=$(echo "$REVIEW" | grep 'NOTES:' | sed 's/NOTES: //' | tr -d '\n' || echo "No review")
+            echo "$REVIEW" > "$SCENE_DIR/review.txt"
+            echo "  Score: $OVERALL/10 — $NOTES"
+
+            # --- Results row ---
+            VID_LINK="[MP4](https://github.com/${{ github.repository }}/releases/download/examples/${SLUG}.mp4)"
+            echo "| $NUM | $PRODUCT | $VID_LINK | ${DURATION}s | ${SIZE_MB}MB | $OVERALL/10 | $NOTES |" >> "$RESULTS_FILE"
+
+            # Track for README
+            EXAMPLE_LINKS="${EXAMPLE_LINKS}| ${PRODUCT} | ![${SLUG}](output/examples/${SLUG}.gif) | ${DURATION}s | $OVERALL/10 | [Watch with audio](https://github.com/${{ github.repository }}/releases/download/examples/${SLUG}.mp4) |\n"
+
+            PASS=$((PASS + 1))
+          done
+
+          echo ""
+          echo "================================"
+          echo "Results: $PASS passed, $FAIL failed"
+          echo "================================"
+          cat "$RESULTS_FILE"
+
+          # Save results
+          cp "$RESULTS_FILE" "$PLUGIN_DIR/test-results.md"
+
+          # Save example links for later steps
+          echo -e "$EXAMPLE_LINKS" > "$TEST_DIR/example-links.txt"
+
+          # Fail if more than half failed
+          TOTAL=$((PASS + FAIL))
+          if [ "$TOTAL" -gt 0 ] && [ "$FAIL" -gt "$((TOTAL / 2))" ]; then
+            echo "More than half of tests failed"
+            exit 1
+          fi
+
+      - name: Upload videos to release
+        if: github.ref == 'refs/heads/master' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create or update the examples release
+          gh release delete examples --yes 2>/dev/null || true
+          gh release create examples \
+            --title "Example Demos (auto-generated)" \
+            --notes "Demo videos generated by the plugin test suite. Each video was created from a single prompt — no screen recording, no editing." \
+            --latest=false \
+            output/examples/*.mp4 || true
+
+      - name: Update README with examples
+        if: github.ref == 'refs/heads/master' && success()
+        run: |
+          TEST_DIR=".test-runs/${{ github.run_id }}"
+
+          if [ ! -f "$TEST_DIR/example-links.txt" ]; then
+            echo "No example links to add"
+            exit 0
+          fi
+
+          LINKS=$(cat "$TEST_DIR/example-links.txt")
+
+          # Build the examples section
+          EXAMPLES_SECTION="## Example demos (auto-generated)
+
+          Every push to master triggers the plugin test suite. These demos were generated from a single prompt each — no screen recording, no editing.
+
+          | Product | Preview | Duration | Score | Full video |
+          |---------|---------|----------|-------|------------|
+          ${LINKS}
+
+          *Generated by [test-plugin.yml](.github/workflows/test-plugin.yml) — scores from LLM review.*"
+
+          # Replace or append the examples section in README
+          if grep -q "## Example demos" README.md; then
+            # Replace existing section (up to next ## or EOF)
+            python3 -c "
+          import re, sys
+          readme = open('README.md').read()
+          section = '''$EXAMPLES_SECTION'''
+          pattern = r'## Example demos.*?(?=\n## |\Z)'
+          readme = re.sub(pattern, section.strip(), readme, flags=re.DOTALL)
+          open('README.md', 'w').write(readme)
+          "
+          else
+            # Append before ## Origin or at the end
+            python3 -c "
+          import sys
+          readme = open('README.md').read()
+          section = '''
+
+          $EXAMPLES_SECTION
+          '''
+          if '## Origin' in readme:
+              readme = readme.replace('## Origin', section.strip() + '\n\n## Origin')
+          elif '## License' in readme:
+              readme = readme.replace('## License', section.strip() + '\n\n## License')
+          else:
+              readme += section
+          open('README.md', 'w').write(readme)
+          "
+          fi
+
+      - name: Commit examples & updated README
+        if: github.ref == 'refs/heads/master' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/examples/ README.md test-results.md || true
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "ci: update example demos from plugin test suite
+
+          Auto-generated by test-plugin.yml workflow.
+          Run: ${{ github.run_id }}"
+          git push
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            .test-runs/
+            test-results.md
+            output/examples/
+          retention-days: 30
+
+      - name: Comment results on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = fs.readFileSync('test-results.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## framecraft plugin test results\n\n${results}\n\n*Run: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})*`
+            });
