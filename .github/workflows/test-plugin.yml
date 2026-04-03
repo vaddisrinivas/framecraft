@@ -125,13 +125,14 @@ jobs:
             if claude -p \
               --no-session-persistence \
               --max-budget-usd 3 \
-              --permission-mode bypassPermissions \
+              --dangerously-skip-permissions \
               --plugin-dir "$PLUGIN_DIR" \
               "$GENERATION_PROMPT" \
               > "$SCENE_DIR/generation.log" 2>&1; then
               echo "  Session completed"
             else
-              echo "  Session failed"
+              echo "  Session failed — log:"
+              tail -20 "$SCENE_DIR/generation.log" 2>/dev/null || echo "  (no log)"
               echo "| $NUM | $PRODUCT | - | - | - | - | Session failed |" >> "$RESULTS_FILE"
               FAIL=$((FAIL + 1))
               continue
@@ -269,7 +270,7 @@ jobs:
         with:
           name: test-results-${{ github.run_id }}
           path: |
-            .test-runs/
+            .test-runs/**/*
             test-results.md
             output/examples/
           retention-days: 30
