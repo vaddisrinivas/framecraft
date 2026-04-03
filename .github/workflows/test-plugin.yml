@@ -23,13 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
     steps:
-      - name: Check for API key
+      - name: Check for auth token
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "ANTHROPIC_API_KEY secret not set — skipping"
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "CLAUDE_CODE_OAUTH_TOKEN secret not set — skipping"
             echo "SKIP=true" >> "$GITHUB_ENV"
           fi
 
