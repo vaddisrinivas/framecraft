@@ -50,13 +50,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install ffmpeg
-        if: env.SKIP != 'true'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
       - name: Install Python dependencies
         if: env.SKIP != 'true'
-        run: uv sync && uv run playwright install chromium --with-deps
+        run: uv sync
 
       - name: Install Claude Code
         if: env.SKIP != 'true'
@@ -127,7 +123,7 @@ jobs:
             echo "=== TEST $NUM/5: $PRODUCT ($SLUG) ==="
             echo ""
 
-            GENERATION_PROMPT="$PROMPT Save the output video to: $OUTPUT. After rendering, validate it using the framecraft validate_video_output tool. At the very end, print a single line: RESULT: <PASS or FAIL> | <duration in seconds> | <file size in MB>. Do NOT ask questions. Just build it."
+            GENERATION_PROMPT="$PROMPT Save the output video to: $OUTPUT. Also export a GIF preview to: $EXAMPLE_GIF. After rendering, validate it. At the very end, print a single line: RESULT: <PASS or FAIL> | <duration in seconds> | <file size in MB>. Do NOT ask questions. Just build it. Use only MCP tools, no system commands."
 
             if claude -p \
               --no-session-persistence \
