@@ -23,30 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Refresh OAuth token
+      - name: Check auth
         env:
-          CLAUDE_REFRESH_TOKEN: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ -z "$CLAUDE_REFRESH_TOKEN" ]; then
-            echo "CLAUDE_REFRESH_TOKEN secret not set — skipping"
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "CLAUDE_CODE_OAUTH_TOKEN secret not set — skipping"
             echo "SKIP=true" >> "$GITHUB_ENV"
-            exit 0
+          else
+            echo "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" >> "$GITHUB_ENV"
+            echo "Auth token found"
           fi
-          # Exchange refresh token for a fresh access token
-          RESPONSE=$(curl -s -X POST https://claude.ai/v1/oauth/token \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=refresh_token" \
-            -d "refresh_token=$CLAUDE_REFRESH_TOKEN" \
-            -d "client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e")
-          ACCESS_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
-          if [ -z "$ACCESS_TOKEN" ]; then
-            echo "Failed to refresh token: $RESPONSE"
-            echo "SKIP=true" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          echo "::add-mask::$ACCESS_TOKEN"
-          echo "CLAUDE_CODE_OAUTH_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
-          echo "Token refreshed successfully"
 
       - uses: actions/checkout@v4
         if: env.SKIP != 'true'
