@@ -33,11 +33,11 @@ jobs:
             exit 0
           fi
           # Exchange refresh token for a fresh access token
-          RESPONSE=$(curl -s -X POST https://console.anthropic.com/v1/oauth/token \
+          RESPONSE=$(curl -s -X POST https://claude.ai/v1/oauth/token \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=refresh_token" \
             -d "refresh_token=$CLAUDE_REFRESH_TOKEN" \
-            -d "client_id=claude-code")
+            -d "client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e")
           ACCESS_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
           if [ -z "$ACCESS_TOKEN" ]; then
             echo "Failed to refresh token: $RESPONSE"
