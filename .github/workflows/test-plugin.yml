@@ -21,32 +21,47 @@ permissions:
 jobs:
   test-plugin:
     runs-on: ubuntu-latest
-    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     timeout-minutes: 45
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
+      - name: Check for API key
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY secret not set — skipping"
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
+        if: env.SKIP != 'true'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install uv
+        if: env.SKIP != 'true'
         uses: astral-sh/setup-uv@v4
 
       - name: Install Node.js
+        if: env.SKIP != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install ffmpeg
+        if: env.SKIP != 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python dependencies
+        if: env.SKIP != 'true'
         run: uv sync && uv run playwright install chromium --with-deps
 
       - name: Install Claude Code
+        if: env.SKIP != 'true'
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Check plugin structure
+        if: env.SKIP != 'true'
         run: |
           echo "Checking plugin files..."
           for f in ".claude-plugin/plugin.json" ".claude-plugin/marketplace.json" ".mcp.json" "skills/demo-video/SKILL.md" "framecraft.py"; do
@@ -59,13 +74,15 @@ jobs:
           done
 
       - name: Generate, validate & review demos
+        if: env.SKIP != 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -uo pipefail
 
           PLUGIN_DIR="$(pwd)"
-          TEST_DIR="$PLUGIN_DIR/.test-runs/${{ github.run_id }}"
+          TEST_DIR="$PLUGIN_DIR/.test-runs/$RUN_ID"
           EXAMPLES_DIR="$PLUGIN_DIR/output/examples"
           RESULTS_FILE="$TEST_DIR/results.md"
           mkdir -p "$TEST_DIR" "$EXAMPLES_DIR"
@@ -81,13 +98,12 @@ jobs:
             "api-monitor|PingCraft|Make a 20-second teaser for an API monitoring tool called PingCraft. Show the uptime dashboard, latency graphs, and alert configuration. Developer-focused."
           )
 
-          # Results table header
-          cat > "$RESULTS_FILE" << 'EOF'
+          cat > "$RESULTS_FILE" <<'HEADER'
           # framecraft plugin test results
 
           | # | Product | Video | Duration | Size | Review | Notes |
           |---|---------|-------|----------|------|--------|-------|
-          EOF
+          HEADER
 
           EXAMPLE_LINKS=""
 
@@ -104,13 +120,7 @@ jobs:
             echo "=== TEST $NUM/5: $PRODUCT ($SLUG) ==="
             echo ""
 
-            # --- Generate via Claude + MCPs ---
-            GENERATION_PROMPT="$PROMPT
-
-          Save the output video to: $OUTPUT
-          After rendering, validate it using the framecraft validate_video_output tool.
-          At the very end, print a single line: RESULT: <PASS or FAIL> | <duration in seconds> | <file size in MB>
-          Do NOT ask questions. Just build it."
+            GENERATION_PROMPT="$PROMPT Save the output video to: $OUTPUT. After rendering, validate it using the framecraft validate_video_output tool. At the very end, print a single line: RESULT: <PASS or FAIL> | <duration in seconds> | <file size in MB>. Do NOT ask questions. Just build it."
 
             if claude -p \
               --no-session-persistence \
@@ -127,11 +137,10 @@ jobs:
               continue
             fi
 
-            # --- Find the video ---
+            # Find the video
             if [ ! -f "$OUTPUT" ]; then
               OUTPUT=$(find "$SCENE_DIR" -name "*.mp4" -type f 2>/dev/null | head -1)
             fi
-
             if [ -z "$OUTPUT" ] || [ ! -f "$OUTPUT" ]; then
               echo "  No video output"
               echo "| $NUM | $PRODUCT | - | - | - | - | No video output |" >> "$RESULTS_FILE"
@@ -139,63 +148,36 @@ jobs:
               continue
             fi
 
-            # --- Validate with ffprobe ---
-            DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUTPUT" 2>/dev/null | cut -d. -f1 || echo "?")
+            # Validate
+            DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUTPUT" 2>/dev/null | cut -d. -f1 || echo "0")
             SIZE_BYTES=$(stat --printf="%s" "$OUTPUT" 2>/dev/null || echo "0")
-            SIZE_MB=$(echo "scale=1; $SIZE_BYTES / 1048576" | bc 2>/dev/null || echo "?")
-            HAS_VIDEO=$(ffprobe -v error -select_streams v -show_entries stream=codec_name -of csv=p=0 "$OUTPUT" 2>/dev/null || echo "")
-            HAS_AUDIO=$(ffprobe -v error -select_streams a -show_entries stream=codec_name -of csv=p=0 "$OUTPUT" 2>/dev/null || echo "")
+            SIZE_MB=$(echo "scale=1; $SIZE_BYTES / 1048576" | bc 2>/dev/null || echo "0")
+            echo "  Video: ${DURATION}s, ${SIZE_MB}MB"
 
-            if [ -n "$HAS_VIDEO" ] && [ -n "$HAS_AUDIO" ] && [ "$DURATION" -gt 5 ] 2>/dev/null; then
-              echo "  Validated: ${DURATION}s, ${SIZE_MB}MB"
-            else
-              echo "  Validation issues: video=$HAS_VIDEO audio=$HAS_AUDIO duration=$DURATION"
-            fi
-
-            # --- Copy to examples + generate GIF preview ---
+            # Copy + GIF
             cp "$OUTPUT" "$EXAMPLE_MP4"
             ffmpeg -y -i "$OUTPUT" \
               -vf "fps=12,scale=640:360:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
               "$EXAMPLE_GIF" 2>/dev/null || true
 
-            # --- LLM review ---
+            # LLM review
             echo "  Reviewing..."
-            REVIEW_PROMPT="You are a video production reviewer. A demo video was generated for '$PRODUCT'.
-
-          Generation log (last 200 lines):
-          $(tail -200 "$SCENE_DIR/generation.log" 2>/dev/null)
-
-          The video is ${DURATION}s long, ${SIZE_MB}MB, 1920x1080 with voiceover.
-
-          Score 1-10 for each. Be honest and critical.
-
-          Respond in EXACTLY this format (no other text):
-          VISUAL: <1-10>
-          STORY: <1-10>
-          PACING: <1-10>
-          NARRATION: <1-10>
-          OVERALL: <1-10>
-          NOTES: <one line summary>"
-
+            REVIEW_LOG=$(tail -200 "$SCENE_DIR/generation.log" 2>/dev/null)
             REVIEW=$(claude -p \
               --no-session-persistence \
               --model sonnet \
               --max-budget-usd 0.5 \
-              "$REVIEW_PROMPT" 2>/dev/null || echo "OVERALL: ?
-          NOTES: Review failed")
+              "You are a video production reviewer. A demo video was generated for '$PRODUCT'. Generation log: $REVIEW_LOG. The video is ${DURATION}s long, ${SIZE_MB}MB, 1920x1080 with voiceover. Score 1-10 for each. Be honest. Respond in EXACTLY this format: VISUAL: <1-10> STORY: <1-10> PACING: <1-10> NARRATION: <1-10> OVERALL: <1-10> NOTES: <one line summary>" 2>/dev/null || echo "OVERALL: ? NOTES: Review failed")
 
             OVERALL=$(echo "$REVIEW" | grep -o 'OVERALL: [0-9]*' | grep -o '[0-9]*' || echo "?")
             NOTES=$(echo "$REVIEW" | grep 'NOTES:' | sed 's/NOTES: //' | tr -d '\n' || echo "No review")
             echo "$REVIEW" > "$SCENE_DIR/review.txt"
-            echo "  Score: $OVERALL/10 — $NOTES"
+            echo "  Score: $OVERALL/10"
 
-            # --- Results row ---
-            VID_LINK="[MP4](https://github.com/${{ github.repository }}/releases/download/examples/${SLUG}.mp4)"
+            VID_LINK="[MP4](https://github.com/${REPO}/releases/download/examples/${SLUG}.mp4)"
             echo "| $NUM | $PRODUCT | $VID_LINK | ${DURATION}s | ${SIZE_MB}MB | $OVERALL/10 | $NOTES |" >> "$RESULTS_FILE"
-
-            # Track for README
-            EXAMPLE_LINKS="${EXAMPLE_LINKS}| ${PRODUCT} | ![${SLUG}](output/examples/${SLUG}.gif) | ${DURATION}s | $OVERALL/10 | [Watch with audio](https://github.com/${{ github.repository }}/releases/download/examples/${SLUG}.mp4) |\n"
-
+            EXAMPLE_LINKS="${EXAMPLE_LINKS}| ${PRODUCT} | ![${SLUG}](output/examples/${SLUG}.gif) | ${DURATION}s | $OVERALL/10 | [Watch](https://github.com/${REPO}/releases/download/examples/${SLUG}.mp4) |
+          "
             PASS=$((PASS + 1))
           done
 
@@ -205,13 +187,9 @@ jobs:
           echo "================================"
           cat "$RESULTS_FILE"
 
-          # Save results
           cp "$RESULTS_FILE" "$PLUGIN_DIR/test-results.md"
+          printf '%s' "$EXAMPLE_LINKS" > "$TEST_DIR/example-links.txt"
 
-          # Save example links for later steps
-          echo -e "$EXAMPLE_LINKS" > "$TEST_DIR/example-links.txt"
-
-          # Fail if more than half failed
           TOTAL=$((PASS + FAIL))
           if [ "$TOTAL" -gt 0 ] && [ "$FAIL" -gt "$((TOTAL / 2))" ]; then
             echo "More than half of tests failed"
@@ -219,86 +197,74 @@ jobs:
           fi
 
       - name: Upload videos to release
-        if: github.ref == 'refs/heads/master' && success()
+        if: env.SKIP != 'true' && github.ref == 'refs/heads/master' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create or update the examples release
           gh release delete examples --yes 2>/dev/null || true
           gh release create examples \
             --title "Example Demos (auto-generated)" \
-            --notes "Demo videos generated by the plugin test suite. Each video was created from a single prompt — no screen recording, no editing." \
+            --notes "Demo videos generated by the plugin test suite. Each from a single prompt." \
             --latest=false \
-            output/examples/*.mp4 || true
+            output/examples/*.mp4 2>/dev/null || true
 
       - name: Update README with examples
-        if: github.ref == 'refs/heads/master' && success()
+        if: env.SKIP != 'true' && github.ref == 'refs/heads/master' && success()
+        env:
+          RUN_ID: ${{ github.run_id }}
         run: |
-          TEST_DIR=".test-runs/${{ github.run_id }}"
-
+          TEST_DIR=".test-runs/$RUN_ID"
           if [ ! -f "$TEST_DIR/example-links.txt" ]; then
-            echo "No example links to add"
+            echo "No example links"
             exit 0
           fi
 
           LINKS=$(cat "$TEST_DIR/example-links.txt")
 
-          # Build the examples section
-          EXAMPLES_SECTION="## Example demos (auto-generated)
+          python3 << PYEOF
+          import re
 
-          Every push to master triggers the plugin test suite. These demos were generated from a single prompt each — no screen recording, no editing.
+          links = """$LINKS"""
+
+          section = """## Example demos (auto-generated)
+
+          Every push to master triggers the plugin test suite. These demos were generated from a single prompt each.
 
           | Product | Preview | Duration | Score | Full video |
           |---------|---------|----------|-------|------------|
-          ${LINKS}
+          """ + links.strip() + """
 
-          *Generated by [test-plugin.yml](.github/workflows/test-plugin.yml) — scores from LLM review.*"
+          *Generated by [test-plugin.yml](.github/workflows/test-plugin.yml) — scores from LLM review.*"""
 
-          # Replace or append the examples section in README
-          if grep -q "## Example demos" README.md; then
-            # Replace existing section (up to next ## or EOF)
-            python3 -c "
-          import re, sys
+          # Dedent (remove leading whitespace from heredoc)
+          import textwrap
+          section = textwrap.dedent(section)
+
           readme = open('README.md').read()
-          section = '''$EXAMPLES_SECTION'''
-          pattern = r'## Example demos.*?(?=\n## |\Z)'
-          readme = re.sub(pattern, section.strip(), readme, flags=re.DOTALL)
-          open('README.md', 'w').write(readme)
-          "
-          else
-            # Append before ## Origin or at the end
-            python3 -c "
-          import sys
-          readme = open('README.md').read()
-          section = '''
-
-          $EXAMPLES_SECTION
-          '''
-          if '## Origin' in readme:
+          if '## Example demos' in readme:
+              readme = re.sub(r'## Example demos.*?(?=\n## |\Z)', section.strip(), readme, flags=re.DOTALL)
+          elif '## Origin' in readme:
               readme = readme.replace('## Origin', section.strip() + '\n\n## Origin')
           elif '## License' in readme:
               readme = readme.replace('## License', section.strip() + '\n\n## License')
           else:
-              readme += section
+              readme += '\n\n' + section
+
           open('README.md', 'w').write(readme)
-          "
-          fi
+          PYEOF
 
       - name: Commit examples & updated README
-        if: github.ref == 'refs/heads/master' && success()
+        if: env.SKIP != 'true' && github.ref == 'refs/heads/master' && success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/examples/ README.md test-results.md || true
+          git add output/examples/ README.md test-results.md 2>/dev/null || true
           git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "ci: update example demos from plugin test suite
-
-          Auto-generated by test-plugin.yml workflow.
-          Run: ${{ github.run_id }}"
+          git commit -m "ci: update example demos from plugin test suite [skip ci]"
           git push
 
       - name: Upload artifacts
-        if: always()
+        if: always() && env.SKIP != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ github.run_id }}
@@ -309,7 +275,7 @@ jobs:
           retention-days: 30
 
       - name: Comment results on PR
-        if: github.event_name == 'pull_request' && always()
+        if: github.event_name == 'pull_request' && env.SKIP != 'true' && always()
         uses: actions/github-script@v7
         with:
           script: |
