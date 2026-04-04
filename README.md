@@ -1,103 +1,113 @@
 # framecraft
 
-Create polished demo videos from screenshots and scene descriptions.
+A Claude skill + MCP config for creating demo videos. Stitches together existing tools — Playwright, ffmpeg, edge-tts — with a scene config format and reusable HTML templates.
 
-**HTML scenes + Playwright headless render + ffmpeg composite + edge-tts neural voiceover**
+**Not a framework.** A recipe that wires things together so the skill just works.
+
+## What's in the box
+
+```
+framecraft/
+  SKILL.md              <- The brain. Tells Claude how to make demo videos.
+  mcp.json              <- Wires: playwright-mcp, ffmpeg-mcp, edge-tts-mcp
+  framecraft.py         <- Atomic pipeline + validator (fallback when MCPs aren't available)
+  framecraft_mcp.py     <- MCP server exposing pipeline as tools
+  templates/            <- Reusable HTML scene patterns (title card, browser mockup, etc.)
+  examples/             <- Real example: gTabs v0.4 demo config
+  LEARNINGS.md          <- What we learned building this (for future improvement)
+```
+
+## How it works
+
+Claude uses the skill description to orchestrate existing MCPs:
+
+```
+SKILL.md tells Claude:
+  1. Write HTML scenes (CSS animations, screenshots, callouts)
+  2. Use edge-tts MCP to generate voiceover
+  3. Use playwright MCP to render HTML to frames
+  4. Use ffmpeg MCP to composite video + audio
+
+  OR: call framecraft pipeline for atomic one-shot render
+```
 
 ## Quick start
+
+### As a Claude skill (recommended)
+
+1. Clone this repo
+2. Add the MCPs from `mcp.json` to your Claude settings
+3. The skill auto-triggers when you say "make a demo video"
+
+### As a CLI
 
 ```bash
 git clone https://github.com/vaddisrinivas/framecraft.git
 cd framecraft
 uv sync
 uv run playwright install chromium
+
+# Render
 uv run python framecraft.py examples/gtabs-demo.json --auto-duration
+
+# Render one scene
+uv run python framecraft.py examples/gtabs-demo.json --scene 2
+
+# Validate output
+uv run python framecraft.py --validate output.mp4
 ```
 
-## How it works
+## MCP dependencies
 
-```
-scenes.json
-  |
-  |-- Per scene: generate HTML (CSS animations, screenshots, callouts, zoom)
-  |-- Per scene: generate voiceover (edge-tts neural voices)
-  |-- Per scene: render frames (Playwright headless Chrome @ 24-30fps)
-  |
-  '-- Composite: ffmpeg (crossfade transitions + audio mix + optional subtitles)
-       |
-       '-- Output: demo.mp4
-```
+framecraft composes these existing MCPs (see `mcp.json`):
 
-## Features
+| MCP | What it does | Install |
+|-----|-------------|---------|
+| [playwright-mcp](https://github.com/microsoft/playwright-mcp) | Renders HTML to screenshots | `npx @playwright/mcp@latest` |
+| [ffmpeg-mcp-lite](https://github.com/kevinwatt/ffmpeg-mcp-lite) | Video compositing, audio mixing | `uvx ffmpeg-mcp-lite` |
+| [edge-tts-mcp](https://github.com/yuiseki/edge_tts_mcp_server) | Neural voiceover (free, no API key) | `uvx edge_tts_mcp_server` |
 
-| Feature | How |
-|---------|-----|
-| **Neural voiceover** | edge-tts (Microsoft neural voices) — free, no API key |
-| **Per-scene voice** | `"voice": "jenny"` overrides the global default |
-| **Auto-duration** | `--auto-duration` sets scene length from TTS audio + buffer |
-| **Single scene render** | `--scene 2` renders just one scene for fast iteration |
-| **Custom HTML scenes** | `"custom_html": "path.html"` for complex animated scenes |
-| **Screenshot zoom** | Smooth CSS zoom into a region |
-| **Callout annotations** | Positioned labels on screenshots with colored dots |
-| **Background music** | Mix ambient track under voiceover at configurable volume |
-| **Subtitles** | Auto-generated SRT from edge-tts word boundaries |
-| **Crossfade transitions** | Smooth fade between scenes via ffmpeg xfade |
-| **Progress output** | Per-scene status + frame count during render |
+The `framecraft` MCP server itself is the fallback pipeline — does everything in one atomic call.
+
+## Templates
+
+Real HTML scenes from the [gTabs](https://github.com/vaddisrinivas/gtabs) demo:
+
+| Template | What it shows |
+|----------|--------------|
+| `title-card.html` | Product name + tagline + version badge, gradient background |
+| `browser-mockup.html` | Fake Chrome window with 24 messy tabs piling up |
+| `browser-groups.html` | Same Chrome window with color-coded tab groups appearing |
+| `end-card.html` | Logo + GitHub URL + CTA badges |
+
+Copy, edit, use as `custom_html` in your scenes.json.
 
 ## Voices
 
-| Name | Voice | Best for |
-|------|-------|----------|
-| `andrew` | en-US-AndrewNeural | Warm male, product demos |
-| `jenny` | en-US-JennyNeural | Clear female, tutorials |
-| `davis` | en-US-DavisNeural | Deep male, serious tone |
-| `brian` | en-US-BrianNeural | Professional male |
-| `emma` | en-US-EmmaNeural | Friendly female |
-| `ryan` | en-GB-RyanNeural | British male |
-| `sonia` | en-GB-SoniaNeural | British female |
+| Name | Best for |
+|------|----------|
+| `andrew` | Warm male — product demos (default) |
+| `jenny` | Clear female — tutorials |
+| `davis` | Deep male — serious tone |
+| `brian` | Professional male |
+| `emma` | Friendly female |
+| `ryan` | British male |
 
-Falls back to macOS `say` when edge-tts is unavailable.
+## Validation
 
-## CLI
-
-```bash
-uv run python framecraft.py scenes.json                    # render all scenes
-uv run python framecraft.py scenes.json --scene 2          # render only scene 2
-uv run python framecraft.py scenes.json --auto-duration    # auto-detect from TTS
-uv run python framecraft.py scenes.json -o demo.mp4        # override output
-```
-
-## MCP server
-
-6 tools for Claude integration:
-
-| Tool | Purpose |
-|------|---------|
-| `get_scene_template` | Get example config with all fields |
-| `create_scene_html` | Generate one scene's HTML |
-| `preview_scene` | Render one scene to PNG preview |
-| `render_video` | Render full video (or single scene) |
-| `generate_tts` | Generate voiceover audio |
-| `list_voices` | Show available voices |
+After rendering, framecraft auto-validates:
+- Has video stream + audio stream
+- Resolution >= 1280x720
+- No black frames at boundaries
+- File size reasonable
 
 ```bash
-uv run python framecraft_mcp.py
+uv run python framecraft.py --validate demo.mp4
 ```
 
-Add to `~/.claude/settings.json`:
+## Built with gTabs
 
-```json
-"mcpServers": {
-  "framecraft": {
-    "command": "uv",
-    "args": ["run", "--directory", "/path/to/framecraft", "python", "framecraft_mcp.py"]
-  }
-}
-```
-
-## Prerequisites
-
-- Python 3.11+, ffmpeg, internet for edge-tts
+This tool was built while creating the demo video for [gTabs v0.4](https://github.com/vaddisrinivas/gtabs) — an AI tab organizer for Chrome. The `examples/` and `templates/` are from that real project.
 
 ## License
 

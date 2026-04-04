@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #0d0e12;
+    background-image:
+      radial-gradient(ellipse at 30% 40%, rgba(124,106,245,0.12) 0%, transparent 50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    font-family: 'Inter', sans-serif; padding-top: 36px;
+  }
+
+  .headline {
+    font-size: 38px; font-weight: 800; color: #e2e4eb; margin-bottom: 28px;
+    opacity: 0; animation: fade-up 0.7s ease 0.2s forwards;
+  }
+  .headline em { font-style: normal; color: #4ade80; }
+
+  /* ── Browser chrome ── */
+  .browser {
+    width: 1500px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+    opacity: 0; animation: scale-in 0.6s cubic-bezier(0.16,1,0.3,1) 0.1s forwards;
+  }
+  .titlebar {
+    background: #202124; display: flex; align-items: center;
+    padding: 10px 14px; gap: 8px; height: 40px;
+  }
+  .dots { display: flex; gap: 7px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #ffbd2e; } .dot.g { background: #28c940; }
+
+  /* ── Tab bar — Chrome-style groups ── */
+  .tabbar {
+    background: #292b2f; display: flex; align-items: stretch;
+    padding: 6px 8px 0; min-height: 44px; gap: 6px; overflow: hidden;
+  }
+
+  /* Each group is a colored block */
+  .tg {
+    display: flex; align-items: stretch; border-radius: 10px 10px 0 0;
+    overflow: hidden; opacity: 0; transform: translateY(12px) scale(0.95);
+    position: relative;
+  }
+  .tg::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+  }
+
+  /* Group label chip */
+  .tg-label {
+    writing-mode: horizontal-tb;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+    padding: 0 12px; display: flex; align-items: center; justify-content: center;
+    border-radius: 10px 0 0 0; white-space: nowrap; min-width: 50px;
+  }
+
+  /* Individual tab inside a group */
+  .tg-tab {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px; font-size: 12px; white-space: nowrap;
+    border-left: 1px solid rgba(255,255,255,0.04);
+  }
+  .tg-tab:first-of-type { border-left: none; }
+  .tg-tab .fav { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+  /* ── Group colors ── */
+  .tg-blue         { background: rgba(66,133,244,0.15); }
+  .tg-blue::after   { background: #4285f4; }
+  .tg-blue .tg-label { background: #4285f4; color: #fff; }
+  .tg-blue .tg-tab  { color: #aecbfa; }
+
+  .tg-pink         { background: rgba(242,139,130,0.12); }
+  .tg-pink::after   { background: #f28b82; }
+  .tg-pink .tg-label { background: #f28b82; color: #fff; }
+  .tg-pink .tg-tab  { color: #f9bdb6; }
+
+  .tg-green         { background: rgba(74,222,128,0.12); }
+  .tg-green::after   { background: #34a853; }
+  .tg-green .tg-label { background: #34a853; color: #fff; }
+  .tg-green .tg-tab  { color: #81c995; }
+
+  .tg-purple         { background: rgba(124,106,245,0.12); }
+  .tg-purple::after   { background: #7c6af5; }
+  .tg-purple .tg-label { background: #7c6af5; color: #fff; }
+  .tg-purple .tg-tab  { color: #b4a7ff; }
+
+  .tg-yellow         { background: rgba(255,189,46,0.12); }
+  .tg-yellow::after   { background: #fbbc04; }
+  .tg-yellow .tg-label { background: #fbbc04; color: #202124; }
+  .tg-yellow .tg-tab  { color: #fdd663; }
+
+  /* ── Staggered group entrance ── */
+  .tg:nth-child(1) { animation: group-in 0.6s cubic-bezier(0.16,1,0.3,1) 0.5s forwards; }
+  .tg:nth-child(2) { animation: group-in 0.6s cubic-bezier(0.16,1,0.3,1) 0.9s forwards; }
+  .tg:nth-child(3) { animation: group-in 0.6s cubic-bezier(0.16,1,0.3,1) 1.3s forwards; }
+  .tg:nth-child(4) { animation: group-in 0.6s cubic-bezier(0.16,1,0.3,1) 1.7s forwards; }
+  .tg:nth-child(5) { animation: group-in 0.6s cubic-bezier(0.16,1,0.3,1) 2.1s forwards; }
+
+  /* ── URL bar ── */
+  .urlbar {
+    background: #202124; padding: 8px 16px;
+  }
+  .url-input {
+    background: #35363a; border-radius: 20px; height: 34px;
+    display: flex; align-items: center; padding: 0 16px;
+    font-size: 13px; color: #9aa0a6;
+  }
+
+  /* ── Content area ── */
+  .content {
+    background: linear-gradient(180deg, #1a1a2e, #12121f); height: 520px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; gap: 14px;
+  }
+  .check {
+    font-size: 72px; opacity: 0;
+    animation: pop 0.5s cubic-bezier(0.16,1,0.3,1) 2.7s forwards;
+  }
+  .result-text {
+    font-size: 30px; font-weight: 600; color: #4ade80;
+    opacity: 0; animation: fade-up 0.6s ease 3.0s forwards;
+  }
+  .result-sub {
+    font-size: 18px; color: #7a8099;
+    opacity: 0; animation: fade-up 0.6s ease 3.3s forwards;
+  }
+
+  /* ── Bottom badges ── */
+  .badges {
+    position: absolute; bottom: 36px; display: flex; gap: 12px;
+    opacity: 0; animation: fade-up 0.6s ease 3.5s forwards;
+  }
+  .badge {
+    padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .badge .bdot { width: 10px; height: 10px; border-radius: 50%; }
+  .badge-blue   { background: rgba(66,133,244,0.12); color: #8ab4f8; border: 1px solid rgba(66,133,244,0.25); }
+  .badge-blue .bdot { background: #4285f4; }
+  .badge-pink   { background: rgba(242,139,130,0.12); color: #f28b82; border: 1px solid rgba(242,139,130,0.25); }
+  .badge-pink .bdot { background: #f28b82; }
+  .badge-green  { background: rgba(74,222,128,0.12); color: #81c995; border: 1px solid rgba(74,222,128,0.25); }
+  .badge-green .bdot { background: #34a853; }
+  .badge-purple { background: rgba(124,106,245,0.12); color: #b4a7ff; border: 1px solid rgba(124,106,245,0.25); }
+  .badge-purple .bdot { background: #7c6af5; }
+  .badge-yellow { background: rgba(255,189,46,0.12); color: #fdd663; border: 1px solid rgba(255,189,46,0.25); }
+  .badge-yellow .bdot { background: #fbbc04; }
+
+  @keyframes group-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.3); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+  <h1 class="headline">One click. <em>Perfectly organized.</em></h1>
+
+  <div class="browser">
+    <div class="titlebar">
+      <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+    </div>
+    <div class="tabbar">
+      <!-- Dev (blue) -->
+      <div class="tg tg-blue">
+        <div class="tg-label">Dev</div>
+        <div class="tg-tab"><div class="fav" style="background:#333"></div>GitHub</div>
+        <div class="tg-tab"><div class="fav" style="background:#f48024"></div>Stack Overflow</div>
+        <div class="tg-tab"><div class="fav" style="background:#333"></div>PR #247</div>
+        <div class="tg-tab"><div class="fav" style="background:#cb3837"></div>npm</div>
+        <div class="tg-tab"><div class="fav" style="background:#3178c6"></div>TS Docs</div>
+        <div class="tg-tab"><div class="fav" style="background:#333"></div>CI</div>
+      </div>
+      <!-- Media (pink) -->
+      <div class="tg tg-pink">
+        <div class="tg-label">Media</div>
+        <div class="tg-tab"><div class="fav" style="background:#ff0000"></div>YouTube</div>
+        <div class="tg-tab"><div class="fav" style="background:#1ed760"></div>Spotify</div>
+        <div class="tg-tab"><div class="fav" style="background:#e50914"></div>Netflix</div>
+      </div>
+      <!-- Comms (green) -->
+      <div class="tg tg-green">
+        <div class="tg-label">Comms</div>
+        <div class="tg-tab"><div class="fav" style="background:#4285f4"></div>Gmail</div>
+        <div class="tg-tab"><div class="fav" style="background:#5865f2"></div>Discord</div>
+        <div class="tg-tab"><div class="fav" style="background:#1da1f2"></div>X</div>
+      </div>
+      <!-- Work (purple) -->
+      <div class="tg tg-purple">
+        <div class="tg-label">Work</div>
+        <div class="tg-tab"><div class="fav" style="background:#4285f4"></div>Docs</div>
+        <div class="tg-tab"><div class="fav" style="background:#333"></div>Jira</div>
+        <div class="tg-tab"><div class="fav" style="background:#333"></div>Notion</div>
+        <div class="tg-tab"><div class="fav" style="background:#333"></div>Figma</div>
+      </div>
+      <!-- Browse (yellow) -->
+      <div class="tg tg-yellow">
+        <div class="tg-label">Browse</div>
+        <div class="tg-tab"><div class="fav" style="background:#ff9900"></div>Amazon</div>
+        <div class="tg-tab"><div class="fav" style="background:#ff6600"></div>HN</div>
+        <div class="tg-tab"><div class="fav" style="background:#ff4500"></div>Reddit</div>
+      </div>
+    </div>
+    <div class="urlbar">
+      <div class="url-input">&#x1F512; github.com/your-org/project</div>
+    </div>
+    <div class="content">
+      <div class="check">&#x2705;</div>
+      <div class="result-text">24 tabs &rarr; 5 groups in 2 seconds</div>
+      <div class="result-sub">Review, edit, then apply &mdash; or undo anytime</div>
+      <div class="badges">
+        <div class="badge badge-blue"><div class="bdot"></div>Dev &middot; 6</div>
+        <div class="badge badge-pink"><div class="bdot"></div>Media &middot; 3</div>
+        <div class="badge badge-green"><div class="bdot"></div>Comms &middot; 3</div>
+        <div class="badge badge-purple"><div class="bdot"></div>Work &middot; 4</div>
+        <div class="badge badge-yellow"><div class="bdot"></div>Browse &middot; 3</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

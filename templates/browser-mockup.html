@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: #0d0e12;
+    background-image:
+      radial-gradient(ellipse at 30% 40%, rgba(124,106,245,0.12) 0%, transparent 50%);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    font-family: 'Inter', sans-serif; padding-top: 40px;
+  }
+
+  .headline {
+    font-size: 36px; font-weight: 800; color: #e2e4eb; margin-bottom: 30px;
+    opacity: 0; animation: fade-up 0.7s ease 0.2s forwards;
+  }
+  .headline em { font-style: normal; color: #f28b82; }
+
+  /* ── Browser window ── */
+  .browser {
+    width: 1400px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+    opacity: 0; animation: scale-in 0.8s cubic-bezier(0.16,1,0.3,1) 0.1s forwards;
+  }
+
+  /* ── Title bar ── */
+  .titlebar {
+    background: #202124; display: flex; align-items: center;
+    padding: 10px 14px; gap: 8px; height: 42px;
+  }
+  .dots { display: flex; gap: 7px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; }
+  .dot.y { background: #ffbd2e; }
+  .dot.g { background: #28c940; }
+
+  /* ── Tab bar ── */
+  .tabbar {
+    background: #292b2f; display: flex; align-items: flex-end;
+    padding: 0 8px; height: 38px; gap: 1px; overflow: hidden;
+  }
+  .tab {
+    height: 32px; min-width: 42px; max-width: 180px; flex: 1;
+    background: #35363a; border-radius: 8px 8px 0 0;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 10px; font-size: 11px; color: #9aa0a6;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; position: relative;
+  }
+  .tab.active { background: #202124; color: #e2e4eb; }
+  .tab .favicon {
+    width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0;
+    background: #555;
+  }
+  .tab .close { margin-left: auto; font-size: 13px; color: #666; flex-shrink: 0; }
+
+  /* Stagger tab appearance — they pile up fast, feeling chaotic */
+  .tab:nth-child(1)  { animation: tab-appear 0.15s ease 0.4s forwards; }
+  .tab:nth-child(2)  { animation: tab-appear 0.15s ease 0.48s forwards; }
+  .tab:nth-child(3)  { animation: tab-appear 0.15s ease 0.56s forwards; }
+  .tab:nth-child(4)  { animation: tab-appear 0.15s ease 0.64s forwards; }
+  .tab:nth-child(5)  { animation: tab-appear 0.15s ease 0.72s forwards; }
+  .tab:nth-child(6)  { animation: tab-appear 0.15s ease 0.78s forwards; }
+  .tab:nth-child(7)  { animation: tab-appear 0.15s ease 0.83s forwards; }
+  .tab:nth-child(8)  { animation: tab-appear 0.15s ease 0.87s forwards; }
+  .tab:nth-child(9)  { animation: tab-appear 0.15s ease 0.91s forwards; }
+  .tab:nth-child(10) { animation: tab-appear 0.15s ease 0.94s forwards; }
+  .tab:nth-child(11) { animation: tab-appear 0.15s ease 0.97s forwards; }
+  .tab:nth-child(12) { animation: tab-appear 0.15s ease 0.99s forwards; }
+  .tab:nth-child(13) { animation: tab-appear 0.15s ease 1.01s forwards; }
+  .tab:nth-child(14) { animation: tab-appear 0.15s ease 1.03s forwards; }
+  .tab:nth-child(15) { animation: tab-appear 0.15s ease 1.05s forwards; }
+  .tab:nth-child(16) { animation: tab-appear 0.15s ease 1.07s forwards; }
+  .tab:nth-child(17) { animation: tab-appear 0.15s ease 1.09s forwards; }
+  .tab:nth-child(18) { animation: tab-appear 0.15s ease 1.11s forwards; }
+  .tab:nth-child(19) { animation: tab-appear 0.15s ease 1.13s forwards; }
+  .tab:nth-child(20) { animation: tab-appear 0.15s ease 1.15s forwards; }
+  .tab:nth-child(21) { animation: tab-appear 0.15s ease 1.17s forwards; }
+  .tab:nth-child(22) { animation: tab-appear 0.15s ease 1.19s forwards; }
+  .tab:nth-child(23) { animation: tab-appear 0.15s ease 1.21s forwards; }
+  .tab:nth-child(24) { animation: tab-appear 0.15s ease 1.23s forwards; }
+
+  /* ── URL bar ── */
+  .urlbar {
+    background: #202124; padding: 8px 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .url-input {
+    flex: 1; background: #35363a; border-radius: 20px; height: 32px;
+    display: flex; align-items: center; padding: 0 14px;
+    font-size: 13px; color: #9aa0a6;
+  }
+  .url-icon { color: #666; margin-right: 8px; font-size: 12px; }
+
+  /* ── Content area ── */
+  .content {
+    background: #1a1a2e; height: 500px; display: flex; align-items: center;
+    justify-content: center; position: relative;
+  }
+  .content-text {
+    font-size: 22px; color: #555a70; text-align: center; line-height: 1.8;
+    opacity: 0; animation: fade-up 0.8s ease 2s forwards;
+  }
+
+  /* ── Counter ── */
+  .counter {
+    position: absolute; top: 30px; right: 40px;
+    font-size: 64px; font-weight: 800; color: #f28b82;
+    opacity: 0; animation: counter-pop 0.5s cubic-bezier(0.16,1,0.3,1) 1.8s forwards;
+    text-shadow: 0 0 40px rgba(242,139,130,0.3);
+  }
+
+  @keyframes tab-appear {
+    from { opacity: 0; transform: scaleX(0.5); }
+    to { opacity: 1; transform: scaleX(1); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes counter-pop {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+  <h1 class="headline">You have <em>24 tabs</em> open. You can't find anything.</h1>
+
+  <div class="browser">
+    <div class="titlebar">
+      <div class="dots"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div></div>
+    </div>
+    <div class="tabbar">
+      <div class="tab active"><div class="favicon" style="background:#4285f4"></div>Gmail - Inbox (3)<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>GitHub - repo<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#f48024"></div>Stack Overflow<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#ff0000"></div>YouTube<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#ff6600"></div>Hacker News<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#ff4500"></div>r/typescript<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>PR #247<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#4285f4"></div>Google Docs<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#ff9900"></div>Amazon<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#1da1f2"></div>Twitter / X<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>Jira Board<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#cb3837"></div>npm - vitest<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#3178c6"></div>TS Docs<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#764abc"></div>Redux Toolkit<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#1ed760"></div>Spotify<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#e50914"></div>Netflix<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#4285f4"></div>Calendar<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>CI Pipeline<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#0a66c2"></div>LinkedIn<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#5865f2"></div>Discord<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>Figma<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#34a853"></div>Sheets<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>Notion<span class="close">&times;</span></div>
+      <div class="tab"><div class="favicon" style="background:#333"></div>Vercel<span class="close">&times;</span></div>
+    </div>
+    <div class="urlbar">
+      <div class="url-input"><span class="url-icon">&#x1F512;</span> somewhere-in-your-24-tabs.com</div>
+    </div>
+    <div class="content">
+      <div class="counter">24</div>
+      <div class="content-text">
+        Which tab was that PR review in?<br>
+        Where did you open that doc?<br>
+        Is Spotify still playing somewhere?
+      </div>
+    </div>
+  </div>
+</body>
+</html>

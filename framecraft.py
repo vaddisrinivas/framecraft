@@ -807,6 +807,80 @@ def render_demo(
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Validator — check output video quality
+# ---------------------------------------------------------------------------
+
+def validate_video(path: str) -> dict:
+    """Validate a rendered video. Returns dict with checks and overall pass/fail."""
+    checks = {}
+
+    if not os.path.exists(path):
+        return {"exists": False, "passed": False, "checks": {}}
+
+    checks["exists"] = True
+    size = os.path.getsize(path)
+    checks["size_bytes"] = size
+    checks["size_ok"] = size > 10000  # > 10KB
+
+    # Check video stream
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height,duration,codec_name",
+         "-of", "json", path],
+        capture_output=True, text=True,
+    )
+    try:
+        video = json.loads(result.stdout).get("streams", [{}])[0]
+        checks["has_video"] = bool(video.get("codec_name"))
+        checks["video_codec"] = video.get("codec_name", "none")
+        checks["width"] = int(video.get("width", 0))
+        checks["height"] = int(video.get("height", 0))
+        checks["video_duration"] = float(video.get("duration", 0))
+        checks["resolution_ok"] = checks["width"] >= 1280 and checks["height"] >= 720
+    except (json.JSONDecodeError, IndexError, ValueError):
+        checks["has_video"] = False
+
+    # Check audio stream
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=codec_name,duration",
+         "-of", "json", path],
+        capture_output=True, text=True,
+    )
+    try:
+        audio = json.loads(result.stdout).get("streams", [{}])[0]
+        checks["has_audio"] = bool(audio.get("codec_name"))
+        checks["audio_codec"] = audio.get("codec_name", "none")
+        checks["audio_duration"] = float(audio.get("duration", 0))
+    except (json.JSONDecodeError, IndexError, ValueError):
+        checks["has_audio"] = False
+
+    # Check for black frames at start
+    result = subprocess.run(
+        ["ffmpeg", "-i", path, "-vf", "blackdetect=d=0.5:pix_th=0.1",
+         "-an", "-f", "null", "-"],
+        capture_output=True, text=True, timeout=30,
+    )
+    black_frames = "black_start" in result.stderr
+    checks["has_black_frames"] = black_frames
+
+    # Overall pass
+    checks["passed"] = all([
+        checks.get("has_video"),
+        checks.get("has_audio"),
+        checks.get("size_ok"),
+        checks.get("resolution_ok"),
+        not checks.get("has_black_frames"),
+    ])
+
+    return checks
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
     import argparse
 
@@ -819,14 +893,32 @@ examples:
   %(prog)s scenes.json --scene 2              # render only scene 2
   %(prog)s scenes.json --auto-duration        # set duration from TTS length
   %(prog)s scenes.json -o demo.mp4            # override output path
+  %(prog)s --validate output.mp4              # validate a rendered video
         """,
     )
-    parser.add_argument("config", help="Path to scenes.json config file")
+    parser.add_argument("config", nargs="?", help="Path to scenes.json config file")
     parser.add_argument("--output", "-o", help="Override output path")
     parser.add_argument("--scene", "-s", type=int, help="Render only this scene index (0-based)")
     parser.add_argument("--auto-duration", "-a", action="store_true",
                         help="Auto-detect scene duration from TTS audio length")
+    parser.add_argument("--validate", "-v", metavar="VIDEO",
+                        help="Validate a rendered video file instead of rendering")
     args = parser.parse_args()
+
+    if args.validate:
+        print(f"Validating: {args.validate}")
+        result = validate_video(args.validate)
+        for k, v in result.items():
+            if k == "passed":
+                continue
+            status = "OK" if v not in (False, 0, "none") else "FAIL"
+            print(f"  {k}: {v} {status if isinstance(v, bool) else ''}")
+        passed = result.get("passed", False)
+        print(f"\n  {'PASSED' if passed else 'FAILED'}")
+        sys.exit(0 if passed else 1)
+
+    if not args.config:
+        parser.error("config is required when not using --validate")
 
     cfg = DemoConfig.from_json(args.config)
     if args.output:
@@ -835,3 +927,12 @@ examples:
     print(f"framecraft — {len(cfg.scenes)} scenes @ {cfg.width}x{cfg.height} {cfg.fps}fps")
     result = render_demo(cfg, scene_filter=args.scene, auto_duration=args.auto_duration)
     print(f"Output: {result}")
+
+    # Auto-validate after render
+    print("\nValidating output...")
+    checks = validate_video(result)
+    for k, v in checks.items():
+        if k == "passed":
+            continue
+        print(f"  {k}: {v}")
+    print(f"\n  {'PASSED' if checks.get('passed') else 'FAILED'}")
