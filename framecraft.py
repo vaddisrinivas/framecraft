@@ -808,6 +808,126 @@ def render_demo(
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# Init — scaffold a demo project from description
+# ---------------------------------------------------------------------------
+
+INIT_TEMPLATE = {
+    "scenes": [
+        {"title": "{{PRODUCT}}", "subtitle": "{{TAGLINE}}", "narration": "Introducing {{PRODUCT}}. {{TAGLINE}}.", "duration": 0, "animation": "fade"},
+        {"title": "The Problem", "narration": "Describe the problem your users face.", "duration": 0, "animation": "slide-up"},
+        {"title": "The Solution", "narration": "{{PRODUCT}} solves this by...", "screenshot": "./screenshots/feature1.png", "duration": 0, "animation": "scale"},
+        {"title": "How It Works", "narration": "Here's how it works in practice.", "screenshot": "./screenshots/feature2.png", "bullets": ["Fast", "Simple", "Free"], "duration": 0, "animation": "slide-up"},
+        {"title": "{{PRODUCT}}", "subtitle": "{{URL}}", "narration": "Try {{PRODUCT}} now. Open source and free.", "duration": 0, "animation": "fade"},
+    ],
+    "voice": "andrew", "fps": 24, "transition": "crossfade", "transition_duration": 0.4,
+}
+
+
+def init_project(directory: str, product: str = "My Product", tagline: str = "", url: str = "") -> str:
+    """Scaffold a framecraft demo project directory."""
+    os.makedirs(directory, exist_ok=True)
+    os.makedirs(os.path.join(directory, "screenshots"), exist_ok=True)
+    os.makedirs(os.path.join(directory, "scenes"), exist_ok=True)
+    os.makedirs(os.path.join(directory, "output"), exist_ok=True)
+
+    # Generate scenes.json with substituted values
+    config = json.loads(json.dumps(INIT_TEMPLATE))
+    config["output"] = os.path.join(directory, "output", "demo.mp4")
+
+    raw = json.dumps(config, indent=2)
+    raw = raw.replace("{{PRODUCT}}", product)
+    raw = raw.replace("{{TAGLINE}}", tagline or f"The best way to do what {product} does")
+    raw = raw.replace("{{URL}}", url or f"github.com/you/{product.lower().replace(' ', '-')}")
+
+    scenes_path = os.path.join(directory, "scenes.json")
+    with open(scenes_path, "w") as f:
+        f.write(raw)
+
+    # Copy scene.css for reference
+    css_src = os.path.join(os.path.dirname(__file__), "assets", "scene.css")
+    if os.path.exists(css_src):
+        shutil.copy(css_src, os.path.join(directory, "scene.css"))
+
+    return scenes_path
+
+
+# ---------------------------------------------------------------------------
+# Multi-format export
+# ---------------------------------------------------------------------------
+
+def export_all_formats(
+    input_mp4: str,
+    output_dir: str = "",
+    width: int = 1920,
+    height: int = 1080,
+) -> dict[str, str]:
+    """Export to multiple platform-optimized formats from a rendered MP4."""
+    if not output_dir:
+        output_dir = os.path.dirname(input_mp4) or "."
+
+    os.makedirs(output_dir, exist_ok=True)
+    base = os.path.splitext(os.path.basename(input_mp4))[0]
+    outputs = {}
+
+    # GitHub README GIF (640x360, 12fps, looped)
+    gif_path = os.path.join(output_dir, f"{base}-github.gif")
+    subprocess.run([
+        "ffmpeg", "-y", "-i", input_mp4,
+        "-vf", "fps=12,scale=640:360:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer",
+        "-an", gif_path,
+    ], check=True, capture_output=True)
+    outputs["github_gif"] = gif_path
+
+    # Twitter/X optimized (1280x720, max 60s, h264 baseline)
+    twitter_path = os.path.join(output_dir, f"{base}-twitter.mp4")
+    subprocess.run([
+        "ffmpeg", "-y", "-i", input_mp4,
+        "-vf", f"scale=1280:720",
+        "-c:v", "libx264", "-profile:v", "baseline", "-level", "3.1",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        twitter_path,
+    ], check=True, capture_output=True)
+    outputs["twitter_mp4"] = twitter_path
+
+    # LinkedIn (1920x1080, with burned-in subtitles if SRT exists)
+    srt_path = input_mp4.replace(".mp4", ".srt")
+    linkedin_path = os.path.join(output_dir, f"{base}-linkedin.mp4")
+    if os.path.exists(srt_path):
+        subprocess.run([
+            "ffmpeg", "-y", "-i", input_mp4,
+            "-vf", f"subtitles={srt_path}:force_style='FontSize=22,PrimaryColour=&HFFFFFF,BackColour=&H80000000,BorderStyle=4'",
+            "-c:v", "libx264", "-crf", "20", "-c:a", "copy",
+            linkedin_path,
+        ], check=True, capture_output=True)
+    else:
+        shutil.copy(input_mp4, linkedin_path)
+    outputs["linkedin_mp4"] = linkedin_path
+
+    # Thumbnail (first frame after 2 seconds)
+    thumb_path = os.path.join(output_dir, f"{base}-thumb.png")
+    subprocess.run([
+        "ffmpeg", "-y", "-i", input_mp4,
+        "-ss", "2", "-frames:v", "1",
+        thumb_path,
+    ], check=True, capture_output=True)
+    outputs["thumbnail"] = thumb_path
+
+    return outputs
+
+
+# ---------------------------------------------------------------------------
+# Preview — open scene HTML in browser
+# ---------------------------------------------------------------------------
+
+def preview_scene_in_browser(html_path: str, width: int = 1920, height: int = 1080) -> None:
+    """Open a scene HTML file in the default browser for preview."""
+    abs_path = os.path.abspath(html_path)
+    import webbrowser
+    webbrowser.open(f"file://{abs_path}")
+
+
+# ---------------------------------------------------------------------------
 # Validator — check output video quality
 # ---------------------------------------------------------------------------
 
@@ -887,52 +1007,99 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="framecraft — create demo videos from screenshots + scene descriptions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-examples:
-  %(prog)s scenes.json                        # render all scenes
-  %(prog)s scenes.json --scene 2              # render only scene 2
-  %(prog)s scenes.json --auto-duration        # set duration from TTS length
-  %(prog)s scenes.json -o demo.mp4            # override output path
-  %(prog)s --validate output.mp4              # validate a rendered video
-        """,
     )
-    parser.add_argument("config", nargs="?", help="Path to scenes.json config file")
-    parser.add_argument("--output", "-o", help="Override output path")
-    parser.add_argument("--scene", "-s", type=int, help="Render only this scene index (0-based)")
-    parser.add_argument("--auto-duration", "-a", action="store_true",
-                        help="Auto-detect scene duration from TTS audio length")
-    parser.add_argument("--validate", "-v", metavar="VIDEO",
-                        help="Validate a rendered video file instead of rendering")
+    sub = parser.add_subparsers(dest="command")
+
+    # render (default when just passing a config file)
+    p_render = sub.add_parser("render", help="Render a demo video from scenes.json")
+    p_render.add_argument("config", help="Path to scenes.json")
+    p_render.add_argument("--output", "-o", help="Override output path")
+    p_render.add_argument("--scene", "-s", type=int, help="Render one scene (0-based)")
+    p_render.add_argument("--auto-duration", "-a", action="store_true", help="Set duration from TTS")
+
+    # init
+    p_init = sub.add_parser("init", help="Scaffold a new demo project")
+    p_init.add_argument("directory", help="Project directory to create")
+    p_init.add_argument("--product", "-p", default="My Product", help="Product name")
+    p_init.add_argument("--tagline", "-t", default="", help="Product tagline")
+    p_init.add_argument("--url", "-u", default="", help="Product URL")
+
+    # validate
+    p_validate = sub.add_parser("validate", help="Check a rendered video")
+    p_validate.add_argument("video", help="Path to MP4 file")
+
+    # export
+    p_export = sub.add_parser("export", help="Export to multiple platform formats")
+    p_export.add_argument("video", help="Path to rendered MP4")
+    p_export.add_argument("--output-dir", "-d", default="", help="Output directory")
+
+    # preview
+    p_preview = sub.add_parser("preview", help="Open a scene HTML in browser")
+    p_preview.add_argument("html", help="Path to scene HTML file")
+
     args = parser.parse_args()
 
-    if args.validate:
-        print(f"Validating: {args.validate}")
-        result = validate_video(args.validate)
+    # Backward compat: if no subcommand but first arg looks like a .json file, treat as render
+    if not args.command:
+        if len(sys.argv) > 1 and sys.argv[1].endswith(".json"):
+            args.command = "render"
+            args.config = sys.argv[1]
+            args.output = None
+            args.scene = None
+            args.auto_duration = "--auto-duration" in sys.argv or "-a" in sys.argv
+            for i, a in enumerate(sys.argv):
+                if a in ("--output", "-o") and i + 1 < len(sys.argv):
+                    args.output = sys.argv[i + 1]
+                if a in ("--scene", "-s") and i + 1 < len(sys.argv):
+                    args.scene = int(sys.argv[i + 1])
+        else:
+            parser.print_help()
+            sys.exit(1)
+
+    if args.command == "init":
+        path = init_project(args.directory, args.product, args.tagline, args.url)
+        print(f"Project scaffolded: {args.directory}/")
+        print(f"  scenes.json: {path}")
+        print(f"  screenshots/  — drop your PNGs here")
+        print(f"  scenes/       — custom HTML scenes go here")
+        print(f"\nNext: edit scenes.json, then run:")
+        print(f"  framecraft render {os.path.join(args.directory, 'scenes.json')} --auto-duration")
+
+    elif args.command == "validate":
+        print(f"Validating: {args.video}")
+        result = validate_video(args.video)
         for k, v in result.items():
             if k == "passed":
                 continue
-            status = "OK" if v not in (False, 0, "none") else "FAIL"
-            print(f"  {k}: {v} {status if isinstance(v, bool) else ''}")
-        passed = result.get("passed", False)
-        print(f"\n  {'PASSED' if passed else 'FAILED'}")
-        sys.exit(0 if passed else 1)
+            print(f"  {k}: {v}")
+        print(f"\n  {'PASSED' if result.get('passed') else 'FAILED'}")
+        sys.exit(0 if result.get("passed") else 1)
 
-    if not args.config:
-        parser.error("config is required when not using --validate")
+    elif args.command == "export":
+        print(f"Exporting: {args.video}")
+        outputs = export_all_formats(args.video, args.output_dir)
+        for platform, path in outputs.items():
+            size = os.path.getsize(path) / 1024
+            print(f"  {platform}: {path} ({size:.0f}KB)")
+        print(f"\n  {len(outputs)} formats exported")
 
-    cfg = DemoConfig.from_json(args.config)
-    if args.output:
-        cfg.output = args.output
+    elif args.command == "preview":
+        print(f"Opening: {args.html}")
+        preview_scene_in_browser(args.html)
 
-    print(f"framecraft — {len(cfg.scenes)} scenes @ {cfg.width}x{cfg.height} {cfg.fps}fps")
-    result = render_demo(cfg, scene_filter=args.scene, auto_duration=args.auto_duration)
-    print(f"Output: {result}")
+    elif args.command == "render":
+        cfg = DemoConfig.from_json(args.config)
+        if args.output:
+            cfg.output = args.output
 
-    # Auto-validate after render
-    print("\nValidating output...")
-    checks = validate_video(result)
-    for k, v in checks.items():
-        if k == "passed":
-            continue
-        print(f"  {k}: {v}")
-    print(f"\n  {'PASSED' if checks.get('passed') else 'FAILED'}")
+        print(f"framecraft — {len(cfg.scenes)} scenes @ {cfg.width}x{cfg.height} {cfg.fps}fps")
+        result = render_demo(cfg, scene_filter=args.scene, auto_duration=args.auto_duration)
+        print(f"Output: {result}")
+
+        print("\nValidating...")
+        checks = validate_video(result)
+        for k, v in checks.items():
+            if k == "passed":
+                continue
+            print(f"  {k}: {v}")
+        print(f"\n  {'PASSED' if checks.get('passed') else 'FAILED'}")
