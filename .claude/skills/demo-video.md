@@ -12,63 +12,53 @@ trigger: |
 
 You have access to the `framecraft` MCP server with these tools:
 
-- `framecraft__get_scene_template` — Get a starter config to understand the schema
-- `framecraft__create_scene_html` — Generate and preview a single scene's HTML
-- `framecraft__preview_scene` — Render a single scene to PNG for quick visual check
-- `framecraft__render_video` — Render the full demo video (main tool)
-- `framecraft__generate_tts` — Generate voiceover audio from text
-- `framecraft__list_voices` — List available macOS TTS voices
+## Tools
+
+| Tool | When to use |
+|------|-------------|
+| `framecraft__get_scene_template` | Start here — get the full config schema with all fields |
+| `framecraft__create_scene_html` | Generate and save a scene's HTML for manual inspection |
+| `framecraft__preview_scene` | Render one scene to PNG — quick visual check before full render |
+| `framecraft__render_video` | Render the full video (or a single scene with `scene_index`) |
+| `framecraft__generate_tts` | Generate just the voiceover audio to test voice/pacing |
+| `framecraft__list_voices` | Show available voices (edge-tts neural + macOS fallback) |
 
 ## Workflow
 
-1. **Gather inputs**: Ask what screenshots/images the user has, what features to highlight, and desired tone
-2. **Design scenes**: Plan 5-8 scenes — title card, feature highlights (one per scene), end card
-3. **Preview first scene**: Use `preview_scene` to check the look before full render
-4. **Render video**: Use `render_video` with the complete scenes JSON config
-5. **Iterate**: If the user wants changes, modify the config and re-render
+1. **Gather inputs**: What screenshots exist? What features to highlight? What tone?
+2. **Get the template**: Call `get_scene_template` to see all available fields
+3. **Design scenes**: Plan 5-8 scenes. For complex scenes, write custom HTML files.
+4. **Preview key scenes**: Use `preview_scene` on the trickiest scene to check layout
+5. **Render with auto-duration**: Use `render_video` with `auto_duration: true` so scenes match TTS length
+6. **Iterate**: Use `scene_index` to re-render just the scene that needs fixing
 
-## Scene Design Guidelines
+## Scene Design Rules
 
-- **Title card**: Big product name, tagline, fade-in animation, 3-4 seconds
-- **Feature scenes**: Title + screenshot + 2-3 bullet callouts, 4-6 seconds each
-- **Keep narration concise**: 1-2 sentences per scene, ~15 words max
-- **Use varied animations**: Alternate between `fade`, `slide-up`, `scale`
-- **End card**: Product name + URL + CTA, fade animation, 4 seconds
+- **Title card**: Product name + tagline, `animation: "fade"`, 3-4s
+- **Problem scene**: Use `custom_html` with animated mockup showing the pain point
+- **Feature scenes**: `title` + `screenshot` + `bullets` + optional `callouts` and `zoom`
+- **End card**: Product name + URL + CTA, `animation: "fade"`, 4s
 
-## Config Schema
+## Narration Rules
 
-```json
-{
-  "scenes": [
-    {
-      "title": "Heading text",
-      "subtitle": "Secondary text",
-      "narration": "Voiceover text (spoken by TTS)",
-      "screenshot": "/absolute/path/to/image.png",
-      "bullets": ["Point 1", "Point 2", "Point 3"],
-      "duration": 4.0,
-      "bg_color": "#0d0e12",
-      "title_color": "#c5d5ff",
-      "accent_color": "#7c6af5",
-      "animation": "fade",
-      "screenshot_animation": "scale"
-    }
-  ],
-  "output": "/absolute/path/to/output.mp4",
-  "width": 1920,
-  "height": 1080,
-  "fps": 30,
-  "voice": "Samantha",
-  "transition": "crossfade",
-  "transition_duration": 0.5
-}
-```
+- 1-2 sentences per scene, max ~20 words
+- Lead with benefit: "your tabs organize themselves" not "AI-powered tab grouping"
+- Use `voice: "andrew"` (warm male) or `voice: "jenny"` (clear female)
+- Per-scene `voice` overrides the global voice
 
-## Important
+## Key Features
 
-- All file paths in the config must be **absolute paths**
-- Screenshots should be high-res PNGs (1280x800 or larger)
-- Voiceover requires macOS with `say` command
-- Video rendering requires `ffmpeg` installed
-- Each scene renders at the configured fps — a 5-second scene at 30fps = 150 frames
-- Total render time is roughly 2-3x the video duration
+- **Auto-duration**: Set `duration: 0` in scenes, pass `auto_duration: true` — framecraft generates TTS first, measures length, sets scene duration = audio + 1.5s buffer
+- **Per-scene voice**: Different narrator per scene for variety
+- **Custom HTML**: For complex animated scenes (browser mockups, animated diagrams), write standalone HTML files and reference via `custom_html`
+- **Callouts**: Positioned annotation labels on screenshots: `{"text": "Click here", "x": 40, "y": 55, "color": "#4ade80", "delay": 1.5}`
+- **Zoom**: Smooth zoom into a screenshot region: `{"x": 40, "y": 55, "scale": 1.8, "delay": 2.0, "duration": 1.0}`
+- **Subtitles**: Set `subtitle_format: "srt"` to auto-generate subtitles from edge-tts word boundaries
+- **Background music**: Set `background_music` path + `music_volume` (0.0-1.0)
+- **Single scene render**: `scene_index: 2` renders just that scene for fast iteration
+
+## Prerequisites
+
+- ffmpeg installed
+- Internet connection (for edge-tts neural voices)
+- Playwright chromium (installed with `uv run playwright install chromium`)

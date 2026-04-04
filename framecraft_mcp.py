@@ -18,15 +18,16 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
 from framecraft import (
     DemoConfig,
     Scene,
+    EDGE_TTS_VOICES,
     generate_scene_html,
     generate_voiceover,
+    get_audio_duration,
     render_demo,
     render_scene_frames,
 )
@@ -43,8 +44,11 @@ def create_scene_html(
     subtitle: str = "",
     screenshot: str = "",
     bullets: list[str] | None = None,
+    callouts: list[dict] | None = None,
+    zoom: dict | None = None,
     bg_color: str = "#0d0e12",
     animation: str = "fade",
+    title_size: int = 48,
     width: int = 1920,
     height: int = 1080,
     output_path: str = "",
@@ -52,26 +56,25 @@ def create_scene_html(
     """Generate a single HTML scene file with CSS animations.
 
     Use this to preview a scene before rendering the full video.
-    Returns the path to the generated HTML file.
 
     Args:
         title: Main heading text
         subtitle: Secondary text below the title
         screenshot: Absolute path to a screenshot image to embed
         bullets: List of short text bullets displayed below the screenshot
+        callouts: List of callout dicts with keys: text, x (%), y (%), color, delay (s)
+        zoom: Zoom target dict with keys: x (%), y (%), scale, delay (s), duration (s)
         bg_color: Background color (hex)
         animation: Text animation type: fade, slide-up, scale, none
+        title_size: Title font size in pixels
         width: Scene width in pixels
         height: Scene height in pixels
         output_path: Where to save the HTML file (auto-generated if empty)
     """
     scene = Scene(
-        title=title,
-        subtitle=subtitle,
-        screenshot=screenshot,
-        bullets=bullets or [],
-        bg_color=bg_color,
-        animation=animation,
+        title=title, subtitle=subtitle, screenshot=screenshot,
+        bullets=bullets or [], callouts=callouts or [], zoom=zoom,
+        bg_color=bg_color, animation=animation, title_size=title_size,
     )
     html = generate_scene_html(scene, width, height)
 
@@ -91,28 +94,33 @@ def preview_scene(
     subtitle: str = "",
     screenshot: str = "",
     bullets: list[str] | None = None,
+    callouts: list[dict] | None = None,
+    zoom: dict | None = None,
     duration: float = 3.0,
     width: int = 1920,
     height: int = 1080,
     output_path: str = "",
 ) -> str:
-    """Render a single scene to a PNG image (last frame) for quick preview.
+    """Render a single scene to a PNG image (final frame) for quick preview.
 
     Use this to check how a scene looks before committing to a full video render.
 
     Args:
         title: Main heading text
-        subtitle: Secondary text below the title
+        subtitle: Secondary text
         screenshot: Absolute path to a screenshot image
         bullets: List of bullet text items
-        duration: How long to let CSS animations play before capture (seconds)
+        callouts: List of callout annotation dicts
+        zoom: Zoom target dict
+        duration: Seconds to let CSS animations play before capture
         width: Scene width in pixels
         height: Scene height in pixels
         output_path: Where to save the preview PNG (auto-generated if empty)
     """
     scene = Scene(
         title=title, subtitle=subtitle, screenshot=screenshot,
-        bullets=bullets or [], duration=duration,
+        bullets=bullets or [], callouts=callouts or [], zoom=zoom,
+        duration=duration,
     )
     html = generate_scene_html(scene, width, height)
 
@@ -124,7 +132,6 @@ def preview_scene(
         fd, output_path = tempfile.mkstemp(suffix=".png", prefix="framecraft-preview-")
         os.close(fd)
 
-    # Render just the last frame
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -139,42 +146,57 @@ def preview_scene(
 
 
 @mcp.tool()
-def render_video(scenes_json: str, output_path: str = "") -> str:
+def render_video(
+    scenes_json: str,
+    output_path: str = "",
+    scene_index: int = -1,
+    auto_duration: bool = False,
+) -> str:
     """Render a full demo video from a scenes configuration.
 
-    This is the main tool. Pass a JSON string describing all scenes, and it
-    renders the complete video with animations, transitions, and voiceover.
+    This is the main tool. Pass a JSON string describing all scenes.
 
     Args:
         scenes_json: JSON string with the full demo config. Schema:
             {
                 "scenes": [
                     {
-                        "title": "Your Title",
+                        "title": "Heading",
                         "subtitle": "Optional subtitle",
-                        "narration": "Text that will be spoken as voiceover",
-                        "screenshot": "/absolute/path/to/screenshot.png",
+                        "narration": "Voiceover text",
+                        "voice": "andrew",
+                        "screenshot": "/path/to/image.png",
                         "bullets": ["Point 1", "Point 2"],
-                        "duration": 4.0,
-                        "bg_color": "#0d0e12",
+                        "callouts": [{"text": "Look here", "x": 50, "y": 30, "color": "#4ade80", "delay": 1.0}],
+                        "zoom": {"x": 50, "y": 30, "scale": 1.8, "delay": 1.5, "duration": 1.0},
+                        "duration": 0,
+                        "custom_html": "/path/to/custom.html",
                         "animation": "fade"
                     }
                 ],
-                "output": "demo.mp4",
-                "width": 1920,
-                "height": 1080,
-                "fps": 30,
-                "voice": "Samantha",
+                "voice": "andrew",
+                "background_music": "/path/to/music.mp3",
+                "music_volume": 0.15,
+                "subtitle_format": "srt",
                 "transition": "crossfade",
                 "transition_duration": 0.5
             }
+
+            Duration 0 = auto-detect from TTS length when auto_duration is true.
+            Per-scene voice overrides the global voice.
+            custom_html overrides all visual fields for that scene.
+
         output_path: Override the output path from the config
+        scene_index: If >= 0, render only this scene (0-based). -1 = all scenes.
+        auto_duration: Set scene duration automatically from TTS audio length + buffer
     """
     config = DemoConfig.from_dict(json.loads(scenes_json))
     if output_path:
         config.output = output_path
 
-    result = render_demo(config)
+    sf = scene_index if scene_index >= 0 else None
+    result = render_demo(config, scene_filter=sf, auto_duration=auto_duration)
+
     file_size = os.path.getsize(result)
     size_mb = file_size / (1024 * 1024)
     duration = sum(s.duration for s in config.scenes)
@@ -183,7 +205,7 @@ def render_video(scenes_json: str, output_path: str = "") -> str:
         f"Video rendered successfully!\n"
         f"  Output: {result}\n"
         f"  Scenes: {len(config.scenes)}\n"
-        f"  Duration: {duration:.1f}s\n"
+        f"  Duration: ~{duration:.0f}s\n"
         f"  Resolution: {config.width}x{config.height}\n"
         f"  Size: {size_mb:.1f}MB"
     )
@@ -192,14 +214,15 @@ def render_video(scenes_json: str, output_path: str = "") -> str:
 @mcp.tool()
 def generate_tts(
     text: str,
-    voice: str = "Samantha",
+    voice: str = "andrew",
     output_path: str = "",
 ) -> str:
-    """Generate voiceover audio from text using macOS TTS.
+    """Generate voiceover audio from text using edge-tts neural voices.
 
     Args:
         text: The narration text to speak
-        voice: macOS voice name (Samantha, Daniel, etc.)
+        voice: Voice name — short names: andrew, jenny, davis, brian, emma, aria, guy, ryan, sonia.
+               Or full edge-tts ID like en-US-AndrewNeural.
         output_path: Where to save the .wav file (auto-generated if empty)
     """
     if not output_path:
@@ -207,49 +230,68 @@ def generate_tts(
         os.close(fd)
 
     generate_voiceover(text, voice, output_path)
+    duration = get_audio_duration(output_path)
     file_size = os.path.getsize(output_path)
-    return f"Voiceover saved to: {output_path} ({file_size / 1024:.0f}KB)"
+    return f"Voiceover saved to: {output_path} ({file_size / 1024:.0f}KB, {duration:.1f}s)"
 
 
 @mcp.tool()
 def list_voices() -> str:
-    """List available macOS TTS voices for voiceover generation."""
+    """List available TTS voices for voiceover generation.
+
+    Returns edge-tts neural voice shortnames and their full IDs, plus macOS say voices.
+    """
+    lines = ["Edge-TTS neural voices (recommended):"]
+    for short, full in EDGE_TTS_VOICES.items():
+        lines.append(f"  {short:12s} -> {full}")
+
+    lines.append("\nMacOS say voices (fallback, robotic):")
     import subprocess
     result = subprocess.run(["say", "--voice=?"], capture_output=True, text=True)
-    voices = []
-    for line in result.stdout.strip().split("\n"):
+    for line in result.stdout.strip().split("\n")[:10]:
         parts = line.split()
         if len(parts) >= 2:
-            name = parts[0]
-            lang = parts[1]
-            voices.append(f"  {name:20s} {lang}")
+            lines.append(f"  {parts[0]:12s} {parts[1]}")
 
-    # Show first 30 voices
-    return "Available voices:\n" + "\n".join(voices[:30])
+    return "\n".join(lines)
 
 
 @mcp.tool()
 def get_scene_template() -> str:
-    """Get a template scenes.json config to help you get started.
+    """Get a complete example scenes.json config to get started.
 
-    Returns a complete example config that you can modify for your demo.
+    Shows all available fields including callouts, zoom, per-scene voice,
+    background music, and subtitle generation.
     """
     template = {
         "scenes": [
             {
-                "title": "Your Product Name",
+                "title": "Your Product",
                 "subtitle": "Tagline goes here",
                 "narration": "Introducing Your Product. The best way to do X.",
-                "duration": 4.0,
+                "duration": 0,
                 "animation": "fade",
+                "_comment": "duration 0 = auto-detect from TTS with --auto-duration",
             },
             {
-                "title": "Feature One",
-                "screenshot": "/absolute/path/to/screenshot1.png",
-                "narration": "Feature one does something amazing.",
+                "title": "Feature Highlight",
+                "screenshot": "/absolute/path/to/screenshot.png",
+                "narration": "This feature does something amazing.",
+                "voice": "jenny",
                 "bullets": ["Fast", "Reliable", "Free"],
-                "duration": 5.0,
+                "callouts": [
+                    {"text": "Click here", "x": 40, "y": 55, "color": "#4ade80", "delay": 1.5},
+                ],
+                "zoom": {"x": 40, "y": 55, "scale": 1.8, "delay": 2.0, "duration": 1.0},
+                "duration": 6.0,
                 "animation": "slide-up",
+                "screenshot_animation": "scale",
+            },
+            {
+                "custom_html": "/absolute/path/to/custom-scene.html",
+                "narration": "Custom scenes let you use any HTML/CSS.",
+                "duration": 5.0,
+                "_comment": "custom_html overrides all visual fields",
             },
             {
                 "title": "Get Started",
@@ -259,12 +301,16 @@ def get_scene_template() -> str:
                 "animation": "fade",
             },
         ],
+        "output": "/absolute/path/to/output.mp4",
         "width": 1920,
         "height": 1080,
-        "fps": 30,
-        "voice": "Samantha",
+        "fps": 24,
+        "voice": "andrew",
         "transition": "crossfade",
-        "transition_duration": 0.5,
+        "transition_duration": 0.4,
+        "background_music": "",
+        "music_volume": 0.15,
+        "subtitle_format": "",
     }
     return json.dumps(template, indent=2)
 
