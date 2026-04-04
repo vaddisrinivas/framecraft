@@ -1,28 +1,35 @@
 # framecraft
 
-Claude skill + MCP config for demo video creation. Not a framework — stitches existing tools together.
+LLM skill & plugin for demo video creation. Install the plugin, say "make a demo video", done.
 
 ## Architecture
 
-- `SKILL.md` — The brain. Tells Claude the workflow, scene format, and voice options.
-- `mcp.json` — Declares MCP dependencies: playwright, ffmpeg, edge-tts.
-- `framecraft.py` — Atomic pipeline + validator. Fallback when MCPs aren't available.
-- `framecraft_mcp.py` — MCP server wrapping the pipeline as tools.
-- `templates/` — Reusable HTML scenes (from gTabs demo). Copy and customize.
+- `skills/demo-video/SKILL.md` — The brain. Teaches the LLM story structure, visuals, narration.
+- `.mcp.json` — Auto-configures all 4 MCP servers on plugin install.
+- `framecraft.py` — Everything: pipeline, MCP server, CLI, validation, export.
+- `templates/` — Reusable HTML scenes. Copy and customize.
 - `examples/` — Real working config: gTabs v0.4 demo.
 
-## Two modes
+## Plugin install
 
-1. **Claude-driven**: Skill tells Claude to orchestrate playwright-mcp + ffmpeg-mcp + edge-tts-mcp directly.
-2. **Pipeline fallback**: `uv run python framecraft.py scenes.json --auto-duration` does everything atomically.
+```bash
+claude plugin install framecraft
+```
+
+## MCP server
+
+```bash
+uv run python framecraft.py serve    # starts MCP server (stdio)
+```
 
 ## CLI
 
 ```bash
-uv run python framecraft.py scenes.json                  # render all
-uv run python framecraft.py scenes.json --scene 2        # one scene
-uv run python framecraft.py scenes.json --auto-duration  # duration from TTS
-uv run python framecraft.py --validate output.mp4        # check quality
+uv run python framecraft.py render scenes.json --auto-duration
+uv run python framecraft.py render scenes.json --scene 2
+uv run python framecraft.py validate output.mp4
+uv run python framecraft.py init my-demo
+uv run python framecraft.py export output.mp4
 ```
 
 ## Prerequisites

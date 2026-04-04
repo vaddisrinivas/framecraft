@@ -1,0 +1,13 @@
+{
+  "name": "framecraft",
+  "version": "0.5.0",
+  "description": "LLM skill & plugin for creating polished demo videos",
+  "author": {
+    "name": "vaddisrinivas",
+    "url": "https://github.com/vaddisrinivas"
+  },
+  "homepage": "https://github.com/vaddisrinivas/framecraft",
+  "repository": "https://github.com/vaddisrinivas/framecraft",
+  "license": "MIT",
+  "keywords": ["video", "demo", "mcp", "playwright", "ffmpeg", "tts"]
+}

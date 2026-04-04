@@ -1,113 +1,101 @@
 # framecraft
 
-A Claude skill + MCP config for creating demo videos. Stitches together existing tools — Playwright, ffmpeg, edge-tts — with a scene config format and reusable HTML templates.
+An LLM skill & plugin for creating polished demo videos. You describe what you want — your LLM writes the HTML scenes, narration, and config, then framecraft renders everything.
 
-**Not a framework.** A recipe that wires things together so the skill just works.
+**Not a framework.** A pipeline that gives your LLM the tools to produce real video.
 
-## What's in the box
+[![framecraft demo](output/framecraft-demo-preview.gif)](https://github.com/vaddisrinivas/framecraft/releases/download/v0.5-demo/framecraft-demo.mp4)
 
-```
-framecraft/
-  SKILL.md              <- The brain. Tells Claude how to make demo videos.
-  mcp.json              <- Wires: playwright-mcp, ffmpeg-mcp, edge-tts-mcp
-  framecraft.py         <- Atomic pipeline + validator (fallback when MCPs aren't available)
-  framecraft_mcp.py     <- MCP server exposing pipeline as tools
-  templates/            <- Reusable HTML scene patterns (title card, browser mockup, etc.)
-  examples/             <- Real example: gTabs v0.4 demo config
-  LEARNINGS.md          <- What we learned building this (for future improvement)
-```
+> *This demo was made with framecraft itself — one prompt, zero screen recording. [Watch with audio](https://github.com/vaddisrinivas/framecraft/releases/download/v0.5-demo/framecraft-demo.mp4).*
 
-## How it works
-
-Claude uses the skill description to orchestrate existing MCPs:
-
-```
-SKILL.md tells Claude:
-  1. Write HTML scenes (CSS animations, screenshots, callouts)
-  2. Use edge-tts MCP to generate voiceover
-  3. Use playwright MCP to render HTML to frames
-  4. Use ffmpeg MCP to composite video + audio
-
-  OR: call framecraft pipeline for atomic one-shot render
-```
-
-## Quick start
-
-### As a Claude skill (recommended)
-
-1. Clone this repo
-2. Add the MCPs from `mcp.json` to your Claude settings
-3. The skill auto-triggers when you say "make a demo video"
-
-### As a CLI
+## Install
 
 ```bash
-git clone https://github.com/vaddisrinivas/framecraft.git
-cd framecraft
-uv sync
-uv run playwright install chromium
-
-# Render
-uv run python framecraft.py examples/gtabs-demo.json --auto-duration
-
-# Render one scene
-uv run python framecraft.py examples/gtabs-demo.json --scene 2
-
-# Validate output
-uv run python framecraft.py --validate output.mp4
+claude plugin install framecraft
 ```
 
-## MCP dependencies
+That's it. The plugin auto-configures everything — the skill that teaches your LLM how to make demos, plus all 4 MCP servers (Playwright, FFmpeg, Edge TTS, and the framecraft pipeline).
 
-framecraft composes these existing MCPs (see `mcp.json`):
+## Usage
 
-| MCP | What it does | Install |
-|-----|-------------|---------|
-| [playwright-mcp](https://github.com/microsoft/playwright-mcp) | Renders HTML to screenshots | `npx @playwright/mcp@latest` |
-| [ffmpeg-mcp-lite](https://github.com/kevinwatt/ffmpeg-mcp-lite) | Video compositing, audio mixing | `uvx ffmpeg-mcp-lite` |
-| [edge-tts-mcp](https://github.com/yuiseki/edge_tts_mcp_server) | Neural voiceover (free, no API key) | `uvx edge_tts_mcp_server` |
+```
+You: "Make a demo video for my tab organizer extension"
+```
 
-The `framecraft` MCP server itself is the fallback pipeline — does everything in one atomic call.
+Your LLM handles the rest — writes custom HTML scenes, generates voiceover, captures frames, composites the video. You get a polished 1920x1080 MP4 with transitions and narration.
 
-## Templates
+## What the plugin provides
 
-Real HTML scenes from the [gTabs](https://github.com/vaddisrinivas/gtabs) demo:
+| Component | What it does |
+|-----------|-------------|
+| **Skill** (`skills/demo-video/SKILL.md`) | Teaches your LLM story structure, visual design, narration craft, pacing |
+| **Pipeline** (`framecraft.py serve`) | Validation, rendering, export, project scaffolding — as MCP tools |
+| **MCP config** (`.mcp.json`) | Auto-configures all 4 MCP servers on install |
+| **Format** (`scenes.json`) | Scene schema with screenshots, callouts, zoom, custom HTML, voice per scene |
+| **Templates** | Reusable HTML scenes — title cards, browser mockups, end cards |
 
-| Template | What it shows |
-|----------|--------------|
-| `title-card.html` | Product name + tagline + version badge, gradient background |
-| `browser-mockup.html` | Fake Chrome window with 24 messy tabs piling up |
-| `browser-groups.html` | Same Chrome window with color-coded tab groups appearing |
-| `end-card.html` | Logo + GitHub URL + CTA badges |
+## MCP servers (auto-configured)
 
-Copy, edit, use as `custom_html` in your scenes.json.
+| Server | Purpose | Powered by |
+|--------|---------|-----------|
+| `framecraft` | Pipeline: render, validate, export, scaffold | bundled |
+| `playwright` | Captures HTML scenes as frames | [@playwright/mcp](https://github.com/microsoft/playwright-mcp) |
+| `ffmpeg` | Video compositing, transitions, audio mixing | [ffmpeg-mcp-lite](https://github.com/kevinwatt/ffmpeg-mcp-lite) |
+| `edge-tts` | Neural voiceover — 10 voices, free, no API key | [edge-tts-mcp](https://github.com/yuiseki/edge_tts_mcp_server) |
+
+All 4 auto-start when the plugin is installed. Override any in your Claude settings.
 
 ## Voices
 
-| Name | Best for |
-|------|----------|
-| `andrew` | Warm male — product demos (default) |
-| `jenny` | Clear female — tutorials |
-| `davis` | Deep male — serious tone |
-| `brian` | Professional male |
-| `emma` | Friendly female |
-| `ryan` | British male |
+10 neural voices via Edge TTS — free, no API key:
 
-## Validation
+| Name | Accent | Personality |
+|------|--------|------------|
+| `andrew` | US | Warm, conversational — product demos (default) |
+| `jenny` | US | Clear, upbeat — tutorials |
+| `davis` | US | Deep, authoritative — serious tone |
+| `brian` | US | Professional, measured |
+| `emma` | US | Friendly, enthusiastic |
+| `aria` | US | Expressive, natural |
+| `guy` | US | Casual, relaxed |
+| `amber` | US | Warm, approachable |
+| `ryan` | British | Polished — premium positioning |
+| `sonia` | British | Professional, clear |
 
-After rendering, framecraft auto-validates:
-- Has video stream + audio stream
-- Resolution >= 1280x720
-- No black frames at boundaries
-- File size reasonable
+## Templates
 
-```bash
-uv run python framecraft.py --validate demo.mp4
-```
+Reusable HTML scenes from the [gTabs](https://github.com/vaddisrinivas/gtabs) demo:
 
-## Built with gTabs
+| Template | What it shows |
+|----------|--------------|
+| `title-card.html` | Product name + tagline + version badge |
+| `browser-mockup.html` | Chrome window with 24 messy tabs |
+| `browser-groups.html` | Chrome window with color-coded tab groups |
+| `end-card.html` | Logo + GitHub URL + CTA badges |
 
-This tool was built while creating the demo video for [gTabs v0.4](https://github.com/vaddisrinivas/gtabs) — an AI tab organizer for Chrome. The `examples/` and `templates/` are from that real project.
+Your LLM can use these as starting points or write entirely custom HTML scenes.
+
+## Self-demo
+
+The `scenes/framecraft-demo/` directory contains the scenes used to create framecraft's own demo video — portal animations, chat mockups, pipeline diagrams, and a meta self-reference. A working example of what the plugin produces.
+
+## Example demos (auto-generated)
+
+Every push to master generates a demo video from a single prompt — no screen recording, no editing. Each run is verifiable via the linked CI logs.
+
+| Product | Preview | Duration | Mode | CI Run | Full video |
+|---------|---------|----------|------|--------|------------|
+| VaultKey | ![password-manager](output/examples/password-manager.gif) | 14s | plugin | [run](https://github.com/vaddisrinivas/framecraft/actions/runs/23930802124) | [Watch](https://github.com/vaddisrinivas/framecraft/releases/download/examples/password-manager.mp4) |
+| SkyPulse | ![weather-app](output/examples/weather-app.gif) | 14s | plugin | [run](https://github.com/vaddisrinivas/framecraft/actions/runs/23931058867) | [Watch](https://github.com/vaddisrinivas/framecraft/releases/download/examples/weather-app.mp4) |
+| turbotest | ![cli-tool](output/examples/cli-tool.gif) | 16s | MCP-only | [run](https://github.com/vaddisrinivas/framecraft/actions/runs/23931398647) | [Watch](https://github.com/vaddisrinivas/framecraft/releases/download/examples/cli-tool.mp4) |
+| PingCraft | ![api-monitor](output/examples/api-monitor.gif) | 11s | plugin | [run](https://github.com/vaddisrinivas/framecraft/actions/runs/23930509050) | [Watch](https://github.com/vaddisrinivas/framecraft/releases/download/examples/api-monitor.mp4) |
+
+*Latest: turbotest | Mode: MCP-only | Cost: $1.06 | 49 turns | 14 min | 1.8M tokens*
+*Generated by [test-plugin.yml](.github/workflows/test-plugin.yml) — click any "run" link to verify.*
+
+## Origin
+
+Built while creating the demo video for [gTabs v0.4](https://github.com/vaddisrinivas/gtabs). The `examples/` and `templates/` come from that project.
 
 ## License
 

@@ -1,0 +1,419 @@
+name: Plugin Test Suite
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'SKILL.md'
+      - 'skills/**'
+      - 'framecraft.py'
+      - '.mcp.json'
+      - '.claude-plugin/**'
+      - 'templates/**'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check auth
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "CLAUDE_CODE_OAUTH_TOKEN not set — skipping"
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          else
+            echo "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" >> "$GITHUB_ENV"
+            echo "Auth OK"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP != 'true'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        if: env.SKIP != 'true'
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Node.js
+        if: env.SKIP != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        if: env.SKIP != 'true'
+        run: uv sync && npm install -g @anthropic-ai/claude-code
+
+      - name: Check plugin structure
+        if: env.SKIP != 'true'
+        run: |
+          for f in ".claude-plugin/plugin.json" ".mcp.json" "skills/demo-video/SKILL.md" "framecraft.py"; do
+            [ -f "$f" ] && echo "  OK $f" || { echo "  MISSING $f"; exit 1; }
+          done
+
+      - name: Generate demo
+        if: env.SKIP != 'true'
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+
+          PLUGIN_DIR="$(pwd)"
+          TEST_DIR="$PLUGIN_DIR/.test-runs/$RUN_ID"
+          EXAMPLES_DIR="$PLUGIN_DIR/output/examples"
+          mkdir -p "$TEST_DIR" "$EXAMPLES_DIR"
+
+          # Rotate through scenarios
+          ALL_SCENARIOS=(
+            "password-manager|VaultKey|Make a 15-second teaser video for a password manager extension called VaultKey. 3 scenes max: hook, feature, CTA."
+            "weather-app|SkyPulse|Make a 15-second teaser for a weather app called SkyPulse. 3 scenes max: radar view, alerts, CTA. Dark UI."
+            "cli-tool|turbotest|Make a 15-second teaser for a CLI tool called turbotest that runs tests 10x faster. 3 scenes max: before/after, CTA."
+            "note-taking|ThinkPad|Make a 15-second teaser for a note app called ThinkPad. 3 scenes max: editor, search, CTA. Minimal."
+            "api-monitor|PingCraft|Make a 15-second teaser for an API monitor called PingCraft. 3 scenes max: dashboard, alerts, CTA."
+          )
+          RUN_NUM=$(gh api repos/${REPO}/actions/runs --jq '.total_count' 2>/dev/null || echo "$RUN_ID")
+          IDX=$((RUN_NUM % ${#ALL_SCENARIOS[@]}))
+          IFS='|' read -r SLUG PRODUCT PROMPT <<< "${ALL_SCENARIOS[$IDX]}"
+
+          OUTPUT="$TEST_DIR/demo.mp4"
+          EXAMPLE_MP4="$EXAMPLES_DIR/${SLUG}.mp4"
+          EXAMPLE_GIF="$EXAMPLES_DIR/${SLUG}.gif"
+
+          echo "=== Generating: $PRODUCT ($SLUG) ==="
+
+          # Create a stripped MCP config with ONLY the 3 external MCPs (no framecraft)
+          # This proves the skill alone + external MCPs is enough
+          cat > "$TEST_DIR/test-mcp.json" << 'MCPEOF'
+          {
+            "mcpServers": {
+              "playwright": {
+                "command": "npx",
+                "args": ["@playwright/mcp@latest"]
+              },
+              "ffmpeg": {
+                "command": "uvx",
+                "args": ["ffmpeg-mcp-lite"]
+              },
+              "edge-tts": {
+                "command": "uvx",
+                "args": ["edge_tts_mcp_server"]
+              }
+            }
+          }
+          MCPEOF
+
+          GENERATION_PROMPT="$PROMPT
+
+          Save the output video to: $OUTPUT
+          Also export a GIF preview (640x360, 12fps) to: $EXAMPLE_GIF
+
+          You have 3 MCP servers: playwright (browser rendering), ffmpeg (video compositing), edge-tts (voiceover).
+          Use these MCP tools to: write HTML scenes, capture frames, generate TTS audio, composite video.
+          Do NOT run system commands for ffmpeg or playwright — use the MCP tools only.
+
+          After rendering, print a single line: RESULT: PASS | <duration in seconds> | <file size in MB>
+          Do NOT ask questions. Just build it."
+
+          # === TEST A: MCP-only (no framecraft pipeline) ===
+          # Proves SKILL.md + 3 external MCPs is sufficient
+          echo "  [A] MCP-only generation..."
+          claude -p \
+            --no-session-persistence \
+            --output-format json \
+            --max-budget-usd 1.5 \
+            --dangerously-skip-permissions \
+            --mcp-config "$TEST_DIR/test-mcp.json" \
+            --system-prompt-file "$PLUGIN_DIR/skills/demo-video/SKILL.md" \
+            "$GENERATION_PROMPT" \
+            > "$TEST_DIR/output.json" 2>"$TEST_DIR/generation.log" || true
+
+          MCP_ONLY_PASS="false"
+          if [ -f "$OUTPUT" ]; then
+            MCP_ONLY_PASS="true"
+            echo "  [A] MCP-only: VIDEO CREATED"
+          else
+            FOUND=$(find "$TEST_DIR" -name "*.mp4" -type f 2>/dev/null | head -1)
+            if [ -n "$FOUND" ]; then
+              MCP_ONLY_PASS="true"
+              OUTPUT="$FOUND"
+              echo "  [A] MCP-only: VIDEO FOUND at $FOUND"
+            else
+              echo "  [A] MCP-only: NO VIDEO"
+            fi
+          fi
+
+          # === TEST B: Full plugin (framecraft MCP + external MCPs) ===
+          # Fallback — if MCP-only failed, try with full plugin
+          if [ "$MCP_ONLY_PASS" = "false" ]; then
+            echo "  [B] Full plugin generation (fallback)..."
+            OUTPUT="$TEST_DIR/demo.mp4"
+            claude -p \
+              --no-session-persistence \
+              --output-format json \
+              --max-budget-usd 1.5 \
+              --dangerously-skip-permissions \
+              --plugin-dir "$PLUGIN_DIR" \
+              "$GENERATION_PROMPT" \
+              > "$TEST_DIR/output.json" 2>"$TEST_DIR/generation.log" || true
+            GEN_MODE="plugin"
+          else
+            GEN_MODE="mcp-only"
+          fi
+
+          # Parse stats from JSON
+          COST=$(python3 -c "import json; d=json.load(open('$TEST_DIR/output.json')); print(f\"{d.get('total_cost_usd',0):.4f}\")" 2>/dev/null || echo "?")
+          TURNS=$(python3 -c "import json; d=json.load(open('$TEST_DIR/output.json')); print(d.get('num_turns',0))" 2>/dev/null || echo "?")
+          DURATION_MS=$(python3 -c "import json; d=json.load(open('$TEST_DIR/output.json')); print(d.get('duration_ms',0))" 2>/dev/null || echo "0")
+          INPUT_TOKENS=$(python3 -c "import json; d=json.load(open('$TEST_DIR/output.json')); print(d.get('usage',{}).get('input_tokens',0) + d.get('usage',{}).get('cache_read_input_tokens',0))" 2>/dev/null || echo "?")
+          OUTPUT_TOKENS=$(python3 -c "import json; d=json.load(open('$TEST_DIR/output.json')); print(d.get('usage',{}).get('output_tokens',0))" 2>/dev/null || echo "?")
+          RESULT_TEXT=$(python3 -c "import json; d=json.load(open('$TEST_DIR/output.json')); print(d.get('result',''))" 2>/dev/null || echo "")
+          DURATION_S=$((DURATION_MS / 1000))
+
+          echo "  Cost: \$$COST | Turns: $TURNS | Time: ${DURATION_S}s | Tokens: ${INPUT_TOKENS}in/${OUTPUT_TOKENS}out"
+
+          # Check if video was created
+          if [ -f "$OUTPUT" ]; then
+            cp "$OUTPUT" "$EXAMPLE_MP4"
+            echo "  Video: $EXAMPLE_MP4"
+            VID_SIZE=$(stat --printf="%s" "$EXAMPLE_MP4" 2>/dev/null || echo "0")
+            VID_MB=$(echo "scale=1; $VID_SIZE / 1048576" | bc 2>/dev/null || echo "?")
+
+            # Parse RESULT line for video duration
+            VID_DURATION=$(echo "$RESULT_TEXT" | grep -o 'RESULT: PASS | [0-9]*' | grep -o '[0-9]*$' || echo "?")
+            GEN_STATUS="PASS"
+          else
+            # Try finding any mp4
+            FOUND=$(find "$TEST_DIR" -name "*.mp4" -type f 2>/dev/null | head -1)
+            if [ -n "$FOUND" ]; then
+              cp "$FOUND" "$EXAMPLE_MP4"
+              VID_SIZE=$(stat --printf="%s" "$EXAMPLE_MP4" 2>/dev/null || echo "0")
+              VID_MB=$(echo "scale=1; $VID_SIZE / 1048576" | bc 2>/dev/null || echo "?")
+              VID_DURATION="?"
+              GEN_STATUS="PASS"
+            else
+              echo "  No video output"
+              GEN_STATUS="FAIL"
+              VID_MB="0"
+              VID_DURATION="0"
+            fi
+          fi
+
+          # LLM review (haiku, no tools, fast)
+          REVIEW_SCORE="?"
+          REVIEW_NOTES="No review"
+          if [ "$GEN_STATUS" = "PASS" ]; then
+            echo "  Reviewing..."
+            REVIEW_JSON=$(claude -p \
+              --no-session-persistence \
+              --output-format json \
+              --model haiku \
+              --max-budget-usd 0.1 \
+              --tools "" \
+              "Rate this demo video 1-10. Product: $PRODUCT. Scenes: $(echo "$RESULT_TEXT" | tail -5). Reply ONLY: SCORE:<1-10> NOTE:<one line>" 2>/dev/null || echo "{}")
+            REVIEW_TEXT=$(python3 -c "import json; print(json.load(open('/dev/stdin')).get('result',''))" <<< "$REVIEW_JSON" 2>/dev/null || echo "")
+            REVIEW_COST=$(python3 -c "import json; print(f\"{json.load(open('/dev/stdin')).get('total_cost_usd',0):.4f}\")" <<< "$REVIEW_JSON" 2>/dev/null || echo "0")
+            REVIEW_SCORE=$(echo "$REVIEW_TEXT" | grep -o 'SCORE:[0-9]*' | grep -o '[0-9]*' || echo "?")
+            REVIEW_NOTES=$(echo "$REVIEW_TEXT" | grep -o 'NOTE:.*' | sed 's/NOTE://' || echo "No review")
+            TOTAL_COST=$(python3 -c "print(f'{$COST + $REVIEW_COST:.4f}')" 2>/dev/null || echo "$COST")
+            echo "  Score: $REVIEW_SCORE/10 — $REVIEW_NOTES"
+          else
+            TOTAL_COST="$COST"
+          fi
+
+          # Save stats
+          cat > "$TEST_DIR/stats.json" << STATEOF
+          {
+            "product": "$PRODUCT",
+            "slug": "$SLUG",
+            "status": "$GEN_STATUS",
+            "video_duration": "$VID_DURATION",
+            "video_size_mb": "$VID_MB",
+            "score": "$REVIEW_SCORE",
+            "notes": "$REVIEW_NOTES",
+            "cost_usd": "$TOTAL_COST",
+            "turns": "$TURNS",
+            "duration_s": "$DURATION_S",
+            "input_tokens": "$INPUT_TOKENS",
+            "output_tokens": "$OUTPUT_TOKENS",
+            "date": "$(date -u +%Y-%m-%d)"
+          }
+          STATEOF
+
+          # Save for later steps
+          echo "PRODUCT=$PRODUCT" >> "$GITHUB_ENV"
+          echo "SLUG=$SLUG" >> "$GITHUB_ENV"
+          echo "GEN_STATUS=$GEN_STATUS" >> "$GITHUB_ENV"
+          echo "VID_DURATION=$VID_DURATION" >> "$GITHUB_ENV"
+          echo "VID_MB=$VID_MB" >> "$GITHUB_ENV"
+          echo "REVIEW_SCORE=$REVIEW_SCORE" >> "$GITHUB_ENV"
+          echo "REVIEW_NOTES=$REVIEW_NOTES" >> "$GITHUB_ENV"
+          echo "TOTAL_COST=$TOTAL_COST" >> "$GITHUB_ENV"
+          echo "TURNS=$TURNS" >> "$GITHUB_ENV"
+          echo "DURATION_S=$DURATION_S" >> "$GITHUB_ENV"
+          echo "INPUT_TOKENS=$INPUT_TOKENS" >> "$GITHUB_ENV"
+          echo "OUTPUT_TOKENS=$OUTPUT_TOKENS" >> "$GITHUB_ENV"
+          echo "GEN_MODE=$GEN_MODE" >> "$GITHUB_ENV"
+
+          if [ "$GEN_STATUS" = "FAIL" ]; then
+            echo "Generation failed"
+            tail -20 "$TEST_DIR/generation.log" 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Upload to release
+        if: env.SKIP != 'true' && github.ref == 'refs/heads/master' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view examples 2>/dev/null || \
+            gh release create examples \
+              --title "Example Demos (auto-generated)" \
+              --notes "Demo videos generated by the plugin test suite. Each from a single prompt — no screen recording." \
+              --latest=false
+          gh release upload examples output/examples/*.mp4 --clobber 2>/dev/null || true
+
+      - name: Update README
+        if: env.SKIP != 'true' && github.ref == 'refs/heads/master' && success()
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          python3 << 'PYEOF'
+          import re, os, json, glob
+
+          repo = os.environ["REPO"]
+          product = os.environ.get("PRODUCT", "?")
+          slug = os.environ.get("SLUG", "?")
+          vid_dur = os.environ.get("VID_DURATION", "?")
+          score = os.environ.get("REVIEW_SCORE", "?")
+          cost = os.environ.get("TOTAL_COST", "?")
+          turns = os.environ.get("TURNS", "?")
+          dur_s = os.environ.get("DURATION_S", "?")
+          in_tok = os.environ.get("INPUT_TOKENS", "?")
+          out_tok = os.environ.get("OUTPUT_TOKENS", "?")
+          gen_mode = os.environ.get("GEN_MODE", "?")
+
+          # Build the new row
+          mode_badge = "MCP-only" if gen_mode == "mcp-only" else "plugin"
+          new_row = f"| {product} | ![{slug}](output/examples/{slug}.gif) | {vid_dur}s | {score}/10 | {mode_badge} | [Watch](https://github.com/{repo}/releases/download/examples/{slug}.mp4) |"
+
+          # Read existing README
+          readme = open("README.md").read()
+
+          # Check if examples section exists
+          if "## Example demos (auto-generated)" in readme:
+              # Find existing table rows
+              table_pattern = r"(\| Product \| Preview.*?\|.*?\n\|[-| ]+\n)(.*?)((?:\n\*Latest|\n\*Generated|\n## |\Z))"
+              match = re.search(table_pattern, readme, re.DOTALL)
+              if match:
+                  header = match.group(1)
+                  existing_rows = match.group(2).strip()
+                  after = match.group(3)
+
+                  # Replace row if same product exists, else append
+                  row_lines = [r for r in existing_rows.split("\n") if r.strip()] if existing_rows else []
+                  replaced = False
+                  for i, line in enumerate(row_lines):
+                      if f"| {product} |" in line:
+                          row_lines[i] = new_row
+                          replaced = True
+                          break
+                  if not replaced:
+                      row_lines.append(new_row)
+
+                  rows_text = "\n".join(row_lines)
+
+                  # Build stats line
+                  stats = f"\n\n*Latest: {product} | Mode: {mode_badge} | Cost: ${cost} | {turns} turns | {dur_s}s | {in_tok} in / {out_tok} out tokens*\n"
+                  stats += f"*Generated by [test-plugin.yml](.github/workflows/test-plugin.yml)*"
+
+                  new_section = f"{header}{rows_text}\n{stats}"
+                  readme = readme[:match.start()] + new_section + after
+          else:
+              # Create new section
+              section = f"""## Example demos (auto-generated)
+
+          Every push to master generates a demo video from a single prompt — no screen recording, no editing.
+
+          | Product | Preview | Duration | Score | Mode | Full video |
+          |---------|---------|----------|-------|------|------------|
+          {new_row}
+
+          *Latest: {product} | Mode: {mode_badge} | Cost: ${cost} | {turns} turns | {dur_s}s | {in_tok} in / {out_tok} out tokens*
+          *Generated by [test-plugin.yml](.github/workflows/test-plugin.yml)*"""
+
+              import textwrap
+              section = textwrap.dedent(section)
+
+              if "## Origin" in readme:
+                  readme = readme.replace("## Origin", section.strip() + "\n\n## Origin")
+              elif "## License" in readme:
+                  readme = readme.replace("## License", section.strip() + "\n\n## License")
+              else:
+                  readme += "\n\n" + section
+
+          open("README.md", "w").write(readme)
+          print("README updated")
+          PYEOF
+
+      - name: Commit & push
+        if: env.SKIP != 'true' && github.ref == 'refs/heads/master' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/examples/ README.md 2>/dev/null || true
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "ci: add ${{ env.PRODUCT }} demo (${{ env.REVIEW_SCORE }}/10, \$${{ env.TOTAL_COST }}, ${{ env.GEN_MODE }}) [skip ci]"
+          git pull --rebase origin master
+          git push
+
+      - name: Upload artifacts
+        if: always() && env.SKIP != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            .test-runs/**/*
+            output/examples/
+          retention-days: 30
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && env.SKIP != 'true' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ env.GEN_STATUS }}';
+            const product = '${{ env.PRODUCT }}';
+            const score = '${{ env.REVIEW_SCORE }}';
+            const cost = '${{ env.TOTAL_COST }}';
+            const turns = '${{ env.TURNS }}';
+            const dur = '${{ env.DURATION_S }}';
+            const body = `## framecraft plugin test: ${product}
+
+            | Metric | Value |
+            |--------|-------|
+            | Status | ${status} |
+            | Score | ${score}/10 |
+            | Cost | $${cost} |
+            | Turns | ${turns} |
+            | Time | ${dur}s |
+
+            *Run: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})*`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });

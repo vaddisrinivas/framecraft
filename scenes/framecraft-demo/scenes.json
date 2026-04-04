@@ -1,0 +1,47 @@
+{
+  "scenes": [
+    {
+      "custom_html": "./scenes/framecraft-demo/01-portal.html",
+      "narration": "From somewhere between pixels and code, something just took shape.",
+      "voice": "andrew",
+      "duration": 0
+    },
+    {
+      "custom_html": "./scenes/framecraft-demo/02-problem.html",
+      "narration": "Making demo videos is painful. Hours of recording, endless retakes. What if you could just ask for one instead?",
+      "voice": "andrew",
+      "duration": 0
+    },
+    {
+      "custom_html": "./scenes/framecraft-demo/03-terminal.html",
+      "narration": "Tell your LLM what you want. It writes the HTML scenes, the narration, the config. It renders every frame, generates voiceover, composites the video. You describe. It builds.",
+      "voice": "andrew",
+      "duration": 0
+    },
+    {
+      "custom_html": "./scenes/framecraft-demo/04-pipeline.html",
+      "narration": "Under the hood, framecraft gives your LLM the tools. Playwright captures frames. Edge TTS generates ten neural voices for free. FFmpeg composites everything with crossfade transitions. Validation catches problems before you ship.",
+      "voice": "andrew",
+      "duration": 0
+    },
+    {
+      "custom_html": "./scenes/framecraft-demo/05-meta.html",
+      "narration": "And here's the thing. This video you're watching right now? One prompt. Your LLM wrote every HTML scene, every line of narration. framecraft rendered it all. No screen recording. No editing.",
+      "voice": "andrew",
+      "duration": 0
+    },
+    {
+      "custom_html": "./scenes/framecraft-demo/06-endcard.html",
+      "narration": "framecraft. An LLM skill and plugin that turns your words into polished demo videos. Open source on GitHub. Try it.",
+      "voice": "andrew",
+      "duration": 0
+    }
+  ],
+  "output": "./output/framecraft-demo.mp4",
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "voice": "andrew",
+  "transition": "crossfade",
+  "transition_duration": 0.5
+}
