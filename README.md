@@ -1,8 +1,6 @@
 # framecraft
 
-[![Integrated in Everything Claude Code](https://img.shields.io/badge/Integrated-Everything%20Claude%20Code-blue?style=flat-square)](https://github.com/affaan-m/everything-claude-code)
-[![Featured in Anthropic Skills](https://img.shields.io/badge/Featured-Anthropic%20Skills-blue?style=flat-square)](https://github.com/anthropics/skills)
-[![npm skills registry](https://img.shields.io/badge/npm-skills%20registry-green?style=flat-square)](https://www.npmjs.com/package/vaddisrinivas/framecraft)
+[![✅ Merged — alirezarezvani/claude-skills](https://img.shields.io/badge/%E2%9C%85%20Merged-alirezarezvani%2Fclaude--skills-green?style=flat-square)](https://github.com/alirezarezvani/claude-skills)
 
 An LLM skill & plugin for creating polished demo videos. You describe what you want — your LLM writes the HTML scenes, narration, and config, then framecraft renders everything.
 
@@ -99,19 +97,14 @@ Every push to master generates a demo video from a single prompt — no screen r
 
 ## Featured In
 
-framecraft and code-tour are integrated in:
+### ✅ Merged
 
-| Registry | Project | Status |
-|----------|---------|--------|
-| 🏛️ **Official** | [Anthropic Skills](https://github.com/anthropics/skills) | Open PR |
-| 🏛️ **Official** | [Everything Claude Code](https://github.com/affaan-m/everything-claude-code) | ✅ Integrated (code-tour native) |
-| 🔧 **Platforms** | [daymade/claude-code-skills](https://github.com/daymade/claude-code-skills) | Open PR |
-| 🔧 **Platforms** | [jeremylongshore/claude-code-plugins-plus-skills](https://github.com/jeremylongshore/claude-code-plugins-plus-skills) | Open PR #506 |
-| 🎨 **Communities** | [ComposioHQ/awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) | Open PR |
-| 🎨 **Communities** | [travisvn/awesome-claude-skills](https://github.com/travisvn/awesome-claude-skills) | Open PR |
-| 🎨 **Communities** | 20+ awesome-* lists (gTabs, framecraft, code-tour) | Open PR |
-
-**code-tour contributor status:** Ported directly into Everything Claude Code main branch by maintainer (April 2026)
+| Project | What | PR |
+|---------|------|----|
+| [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) | framecraft skill | [#475](https://github.com/alirezarezvani/claude-skills/pull/475) |
+| [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) | code-tour skill | [#476](https://github.com/alirezarezvani/claude-skills/pull/476) |
+| [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) | code-tour (native port) | [da813d4](https://github.com/affaan-m/everything-claude-code/commit/da813d4) |
+| [xyNNN/awesome-chrome](https://github.com/xyNNN/awesome-chrome) | gTabs | [#31](https://github.com/xyNNN/awesome-chrome/pull/31) |
 
 ## Origin
 
