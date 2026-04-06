@@ -1,5 +1,9 @@
 # framecraft
 
+[![Integrated in Everything Claude Code](https://img.shields.io/badge/Integrated-Everything%20Claude%20Code-blue?style=flat-square)](https://github.com/affaan-m/everything-claude-code)
+[![Featured in Anthropic Skills](https://img.shields.io/badge/Featured-Anthropic%20Skills-blue?style=flat-square)](https://github.com/anthropics/skills)
+[![npm skills registry](https://img.shields.io/badge/npm-skills%20registry-green?style=flat-square)](https://www.npmjs.com/package/vaddisrinivas/framecraft)
+
 An LLM skill & plugin for creating polished demo videos. You describe what you want — your LLM writes the HTML scenes, narration, and config, then framecraft renders everything.
 
 **Not a framework.** A pipeline that gives your LLM the tools to produce real video.
