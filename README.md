@@ -121,3 +121,4 @@ MIT
 
 **Author:** Srinivas Vaddisrinivas ([GitHub](https://github.com/vaddisrinivas))
 **Contact:** vaddisrinivas170497@gmail.com
+**Contributors:** [CONTRIBUTORS.md](CONTRIBUTORS.md) — Integration status, maintainers, distribution
