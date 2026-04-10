@@ -10,10 +10,27 @@ An LLM skill & plugin for creating polished demo videos. You describe what you w
 
 > *This demo was made with framecraft itself — one prompt, zero screen recording. [Watch with audio](https://github.com/vaddisrinivas/framecraft/releases/download/v0.5-demo/framecraft-demo.mp4).*
 
+## Prerequisites
+
+| Requirement | Install |
+|-------------|---------|
+| Python 3.11+ | [python.org](https://www.python.org/downloads/) |
+| `uv` | `brew install uv` or `pip install uv` |
+| Node.js + npx | [nodejs.org](https://nodejs.org/) |
+| `ffmpeg` binary | `brew install ffmpeg` |
+| Internet access | Required for Edge TTS (no API key needed) |
+
 ## Install
 
 ```bash
+claude plugin marketplace add vaddisrinivas/framecraft
 claude plugin install framecraft
+```
+
+Then install Playwright's Chromium browser (one-time):
+
+```bash
+uv run playwright install chromium
 ```
 
 That's it. The plugin auto-configures everything — the skill that teaches your LLM how to make demos, plus all 4 MCP servers (Playwright, FFmpeg, Edge TTS, and the framecraft pipeline).
