@@ -606,17 +606,45 @@ def composite_video(
             video_only,
         ], check=True, capture_output=True)
 
-    # Step 3: Concat voiceover audio
+    # Step 3: Pad each voiceover to its rendered scene duration, then concat.
+    # Raw narration is shorter than the visual scene because auto-duration adds
+    # breathing room. Concatenating raw files makes `-shortest` truncate later
+    # scenes during the final mux.
     valid_audio = [a for a in audio_files if a and os.path.exists(a)]
     narration_audio = ""
     if valid_audio:
+        padded_audio = []
+        for i, (audio, frame_count) in enumerate(zip(audio_files, scene_frame_counts)):
+            scene_duration = frame_count / fps
+            if transition != "cut" and i < len(scene_frame_counts) - 1:
+                scene_duration = max(0.001, scene_duration - transition_duration)
+            padded_path = os.path.join(tmp_dir, f"audio{i:02d}.wav")
+            if audio and os.path.exists(audio):
+                subprocess.run([
+                    "ffmpeg", "-y",
+                    "-i", audio,
+                    "-af", "apad",
+                    "-t", f"{scene_duration:.6f}",
+                    "-ar", "44100", "-ac", "1",
+                    padded_path,
+                ], check=True, capture_output=True)
+            else:
+                subprocess.run([
+                    "ffmpeg", "-y",
+                    "-f", "lavfi",
+                    "-i", "anullsrc=channel_layout=mono:sample_rate=44100",
+                    "-t", f"{scene_duration:.6f}",
+                    padded_path,
+                ], check=True, capture_output=True)
+            padded_audio.append(padded_path)
+
         narration_audio = os.path.join(tmp_dir, "narration.wav")
-        if len(valid_audio) == 1:
-            shutil.copy(valid_audio[0], narration_audio)
+        if len(padded_audio) == 1:
+            shutil.copy(padded_audio[0], narration_audio)
         else:
             audio_list = os.path.join(tmp_dir, "audio_list.txt")
             with open(audio_list, "w") as f:
-                for a in valid_audio:
+                for a in padded_audio:
                     f.write(f"file '{a}'\n")
             subprocess.run([
                 "ffmpeg", "-y", "-f", "concat", "-safe", "0",
