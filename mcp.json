@@ -10,14 +10,16 @@
     "ffmpeg": {
       "_description": "Video/audio processing — compositing, trimming, format conversion",
       "_install": "uv pip install ffmpeg-mcp-lite",
+      "_note": "Pin mcp<2 — ffmpeg-mcp-lite uses mcp.server.fastmcp which was removed in mcp 2.x",
       "command": "uvx",
-      "args": ["ffmpeg-mcp-lite"]
+      "args": ["--with", "mcp<2", "--from", "ffmpeg-mcp-lite", "ffmpeg-mcp-lite"]
     },
     "edge-tts": {
       "_description": "Text-to-speech — Microsoft neural voices, free, no API key",
-      "_install": "pip install edge_tts_mcp_server",
+      "_install": "pip install edge-tts-mcp",
+      "_note": "Package is edge-tts-mcp (entrypoint edge_tts_mcp). Pin mcp<2 for the same reason as ffmpeg.",
       "command": "uvx",
-      "args": ["edge_tts_mcp_server"]
+      "args": ["--with", "mcp<2", "--from", "edge-tts-mcp", "edge_tts_mcp"]
     },
     "framecraft": {
       "_description": "Pipeline validator/executor — atomic render + validation fallback",

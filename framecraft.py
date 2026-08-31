@@ -1035,7 +1035,7 @@ def _build_mcp_server():
 
     mcp_server = FastMCP(
         "framecraft",
-        description="Create polished demo videos from screenshots and scene descriptions",
+        instructions="Create polished demo videos from screenshots and scene descriptions",
     )
 
     @mcp_server.tool()

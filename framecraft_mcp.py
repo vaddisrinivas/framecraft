@@ -34,7 +34,7 @@ from framecraft import (
 
 mcp = FastMCP(
     "framecraft",
-    description="Create polished demo videos from screenshots and scene descriptions",
+    instructions="Create polished demo videos from screenshots and scene descriptions",
 )
 
 

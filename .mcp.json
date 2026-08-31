@@ -10,11 +10,11 @@
     },
     "ffmpeg": {
       "command": "uvx",
-      "args": ["ffmpeg-mcp-lite"]
+      "args": ["--with", "mcp<2", "--from", "ffmpeg-mcp-lite", "ffmpeg-mcp-lite"]
     },
     "edge-tts": {
       "command": "uvx",
-      "args": ["edge_tts_mcp_server"]
+      "args": ["--with", "mcp<2", "--from", "edge-tts-mcp", "edge_tts_mcp"]
     }
   }
 }
